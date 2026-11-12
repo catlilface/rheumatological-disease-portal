@@ -76,3 +76,34 @@ git push -u origin MIS-123
 4. При необходимости внести исправления по результатам ревью.
 
 **Тимлид приступает к Code Review только после успешного завершения обязательных проверок CI.**
+
+## 5. Локальный запуск и проверки
+
+Требуется Node.js 22 (версия указана в `.nvmrc`).
+
+```bash
+cd frontend
+npm install       # заодно подключает git-хуки husky
+npm run dev       # dev-сервер Vite
+```
+
+| Команда                | Что делает                     |
+| ---------------------- | ------------------------------ |
+| `npm run lint`         | линтер oxlint                  |
+| `npm run format`       | форматирование Prettier        |
+| `npm run format:check` | проверка форматирования        |
+| `npm run typecheck`    | проверка типов TypeScript      |
+| `npm test`             | тесты Vitest + Testing Library |
+| `npm run build`        | production-сборка в `dist/`    |
+
+Перед каждым коммитом husky запускает lint-staged (oxlint и Prettier для изменённых файлов), проверку типов и тесты. Те же проверки и сборка Docker-образа выполняются в GitHub Actions (`.github/workflows/frontend.yml`).
+
+### Docker
+
+```bash
+cd frontend
+docker build -t rheumatology-portal-frontend .
+docker run --rm -p 8080:80 rheumatology-portal-frontend
+```
+
+Приложение будет доступно на http://localhost:8080.
