@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+# TODO(MIS-18): передавать Settings через DI при создании приложения,
+# включая настройку CORS и allowed_hosts, вместо глобального Settings().
 from app.settings import Settings
 
 settings = Settings()
