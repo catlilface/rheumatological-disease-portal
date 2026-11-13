@@ -107,3 +107,17 @@ docker run --rm -p 8080:80 rheumatology-portal-frontend
 ```
 
 Приложение будет доступно на http://localhost:8080.
+
+Настройки nginx задаются переменными окружения (значения по умолчанию указаны в `Dockerfile`, пример лежит в корневом `.env.example`):
+
+| Переменная                   | По умолчанию         | Назначение                                   |
+| ---------------------------- | -------------------- | -------------------------------------------- |
+| `NGINX_CLIENT_MAX_BODY_SIZE` | `100m`               | максимальный размер загружаемого файла       |
+| `NGINX_BACKEND_URL`          | `http://server:8000` | адрес бэкенда для `/api/` (HTTP и WebSocket) |
+| `NGINX_RESOLVER`             | `127.0.0.11`         | DNS для поиска бэкенда (DNS Docker)          |
+
+```bash
+docker run --rm -p 8080:80 --env-file ../.env rheumatology-portal-frontend
+```
+
+Конфиг собирается при старте контейнера из `nginx.conf.template` (envsubst из официального образа nginx).

@@ -54,8 +54,23 @@ jobs:
     name: Docker image
     runs-on: ubuntu-latest
     needs: checks
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
+      # Build context is ./frontend (see defaults.run.working-directory)
       - name: Build image
         run: docker build -t rheumatology-portal-frontend:ci .
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push image to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rheumatology-portal-frontend:${GITHUB_SHA}"
+          docker tag rheumatology-portal-frontend:ci "$IMAGE"
+          docker push "$IMAGE"

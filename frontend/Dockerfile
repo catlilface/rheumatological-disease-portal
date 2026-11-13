@@ -11,7 +11,13 @@ RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Defaults; override at runtime with --env-file .env or -e
+ENV NGINX_CLIENT_MAX_BODY_SIZE=100m \
+    NGINX_BACKEND_URL=http://server:8000 \
+    NGINX_RESOLVER=127.0.0.11
+
+# The nginx entrypoint renders templates via envsubst on start
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80
