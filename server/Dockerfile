@@ -15,7 +15,8 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY server/app ./app
 
 RUN uv sync --locked --no-dev --no-editable \
-    && useradd --create-home --user-group --uid 10001 app
+    && addgroup -S -g 10001 app \
+    && adduser -S -D -u 10001 -G app app
 
 ENV PATH="/app/server/.venv/bin:$PATH"
 

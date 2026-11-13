@@ -1,3 +1,39 @@
-# Placeholder file for the project
-# 
-# services:
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DATABASE__NAME:-rheumatology}
+      POSTGRES_USER: ${DATABASE__USER:-rheumatology}
+      POSTGRES_PASSWORD: ${DATABASE__PASSWORD:?Set DATABASE__PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DATABASE__PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__NAME: ${DATABASE__NAME:-rheumatology}
+      DATABASE__USER: ${DATABASE__USER:-rheumatology}
+      DATABASE__PASSWORD: ${DATABASE__PASSWORD:?Set DATABASE__PASSWORD in .env}
+      DATABASE__CONNECT_TIMEOUT: ${DATABASE__CONNECT_TIMEOUT:-5}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

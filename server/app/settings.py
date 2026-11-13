@@ -4,6 +4,8 @@ from typing import Self
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.database.settings import DatabaseSettings
+
 
 class CorsSettings(BaseModel):
     """CORS configuration populated by the parent Settings model."""
@@ -40,3 +42,4 @@ class Settings(BaseSettings):
     debug: bool = False
     allowed_hosts: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"], min_length=1)
     cors: CorsSettings = Field(default_factory=CorsSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
