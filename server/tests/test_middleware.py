@@ -13,12 +13,12 @@ def configured_app(monkeypatch):
     try:
         with monkeypatch.context() as environment:
             environment.setenv("ALLOWED_HOSTS", '["api.example.test"]')
-            environment.setenv("CORS_ALLOW_ORIGINS", '["https://frontend.example.test"]')
-            environment.setenv("CORS_ALLOW_METHODS", '["GET", "POST"]')
-            environment.setenv("CORS_ALLOW_HEADERS", '["Authorization"]')
-            environment.setenv("CORS_ALLOW_CREDENTIALS", "true")
-            environment.setenv("CORS_EXPOSE_HEADERS", '["X-Request-ID"]')
-            environment.setenv("CORS_MAX_AGE", "120")
+            environment.setenv("CORS__ALLOW_ORIGINS", '["https://frontend.example.test"]')
+            environment.setenv("CORS__ALLOW_METHODS", '["GET", "POST"]')
+            environment.setenv("CORS__ALLOW_HEADERS", '["Authorization"]')
+            environment.setenv("CORS__ALLOW_CREDENTIALS", "true")
+            environment.setenv("CORS__EXPOSE_HEADERS", '["X-Request-ID"]')
+            environment.setenv("CORS__MAX_AGE", "120")
             yield importlib.reload(main).app
     finally:
         importlib.reload(main)

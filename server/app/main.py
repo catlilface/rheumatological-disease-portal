@@ -18,12 +18,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_allow_origins,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
-    allow_credentials=settings.cors_allow_credentials,
-    expose_headers=settings.cors_expose_headers,
-    max_age=settings.cors_max_age,
+    allow_origins=settings.cors.allow_origins,
+    allow_methods=settings.cors.allow_methods,
+    allow_headers=settings.cors.allow_headers,
+    allow_credentials=settings.cors.allow_credentials,
+    expose_headers=settings.cors.expose_headers,
+    max_age=settings.cors.max_age,
 )
 # The last middleware added runs first, including before CORS preflight handling.
 app.add_middleware(

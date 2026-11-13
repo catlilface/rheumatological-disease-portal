@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 
@@ -7,12 +9,9 @@ def clear_settings_environment(monkeypatch):
 
     # Tests with explicit _env_file and isolated-checkout subprocesses still read their fixtures.
     monkeypatch.setitem(Settings.model_config, "env_file", None)
-    for name in (
-        "APP_NAME", "DEBUG", "ALLOWED_HOSTS", "CORS_ALLOW_ORIGINS",
-        "CORS_ALLOW_METHODS", "CORS_ALLOW_HEADERS", "CORS_ALLOW_CREDENTIALS",
-        "CORS_EXPOSE_HEADERS", "CORS_MAX_AGE",
-    ):
-        monkeypatch.delenv(name, raising=False)
+    for name in tuple(os.environ):
+        if name in {"APP_NAME", "DEBUG", "ALLOWED_HOSTS", "CORS"} or name.startswith("CORS_"):
+            monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
