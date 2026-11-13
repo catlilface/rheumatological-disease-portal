@@ -1,16 +1,23 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.15-trixie-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app/server
 
-COPY server/pyproject.toml ./pyproject.toml
+COPY server/pyproject.toml server/uv.lock server/.python-version ./
+
+RUN uv sync --locked --no-dev --no-install-project
+
 COPY server/app ./app
 
-RUN python -m pip install --no-cache-dir . \
+RUN uv sync --locked --no-dev --no-editable \
     && useradd --create-home --user-group --uid 10001 app
+
+ENV PATH="/app/server/.venv/bin:$PATH"
 
 USER app:app
 

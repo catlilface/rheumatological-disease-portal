@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.settings import Settings
 
@@ -10,6 +12,20 @@ app = FastAPI(
     openapi_url=None,
     docs_url=None,
     redoc_url=None,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allow_origins,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
+    allow_credentials=settings.cors_allow_credentials,
+    expose_headers=settings.cors_expose_headers,
+    max_age=settings.cors_max_age,
+)
+# The last middleware added runs first, including before CORS preflight handling.
+app.add_middleware(
+    TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts, www_redirect=False,
 )
 
 
