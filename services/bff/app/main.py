@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from app.routers import knowledge, screenings
+
 # TODO(MIS-18): передавать Settings через DI при создании приложения,
 # включая настройку CORS и allowed_hosts, вместо глобального Settings().
 from app.settings import Settings
@@ -29,6 +31,10 @@ app.add_middleware(
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts, www_redirect=False,
 )
+
+
+app.include_router(screenings.router, prefix="/api/v1")
+app.include_router(knowledge.router, prefix="/api/v1")
 
 
 @app.get("/health")

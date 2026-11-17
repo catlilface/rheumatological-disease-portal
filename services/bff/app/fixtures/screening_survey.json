@@ -1,0 +1,48 @@
+{
+  "id": "rheuma_screening_v1",
+  "weights_version": "draft-v1",
+  "blocks": [
+    {
+      "code": "A",
+      "questions": [
+        {
+          "code": "A1",
+          "type": "boolean",
+          "text": "Беспокоит ли вас боль или припухлость в суставах?",
+          "required": true,
+          "weights": {"yes": 1, "no": 0}
+        },
+        {
+          "code": "A6",
+          "type": "single_choice",
+          "text": "Сколько длится скованность после пробуждения?",
+          "required": true,
+          "options": [
+            {"value": "lt30", "label": "Меньше 30 минут", "weight": 0},
+            {"value": "30-60", "label": "30–60 минут", "weight": 1},
+            {"value": "gt60", "label": "Больше 60 минут", "weight": 2}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "V",
+      "red_flag": true,
+      "interrupt": true,
+      "questions": [
+        {
+          "code": "В1",
+          "type": "boolean",
+          "text": "Острое воспаление одного сустава с невозможностью движения?",
+          "required": true,
+          "red_flag": true
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "sum_blocks": ["A", "Б", "Г"],
+    "thresholds": {"low": [0, 4], "medium": [5, 10], "high": [11, null]},
+    "red_flag_overrides": true
+  }
+}
