@@ -1,4 +1,4 @@
-# Server Service
+# BFF Service
 
 Проект организован по принципу **монорепы**. Все сервисы хранятся в одном Git-репозитории, но для разработки рекомендуется загружать только необходимые компоненты.
 
@@ -12,12 +12,12 @@ git clone \
     --sparse \
     https://github.com/catlilface/rheumatological-disease-portal.git
 cd rheumatological-disease-portal
-git sparse-checkout set server
+git sparse-checkout set services/bff
 ```
 
-После выполнения команд в рабочей директории будут доступны файлы сервиса `server` и файлы из корня репозитория.
+После выполнения команд в рабочей директории будут доступны файлы сервиса `services/bff` и файлы из корня репозитория.
 
-`--filter=blob:none` позволяет не загружать содержимое всех файлов заранее, а `git sparse-checkout set server` ограничивает набор файлов в рабочей директории.
+`--filter=blob:none` позволяет не загружать содержимое всех файлов заранее, а `git sparse-checkout set services/bff` ограничивает набор файлов в рабочей директории.
 
 ## 2. Правила работы с Git
 
@@ -55,7 +55,7 @@ git switch -c MIS-123
 git status
 
 # Добавить необходимые файлы
-git add server/path/to/file
+git add services/bff/path/to/file
 
 # Создать коммит
 git commit -m "feat: implement awesome feature"
@@ -82,12 +82,15 @@ git push -u origin MIS-123
 Backend использует Python 3.15, FastAPI, Uvicorn и `pydantic-settings`. Окружением и зависимостями управляет `uv`.
 
 ```text
-server/
+services/bff/
 ├── app/
-│   ├── main.py          # Приложение и GET /health
-│   ├── settings.py      # Настройки из окружения и корневого .env
+│   ├── main.py          # Приложение, роутеры и GET /health
+│   ├── settings.py      # Настройки из окружения и .env
 │   ├── database/        # Заглушка для будущего подключения к БД
-│   └── domain/          # Заглушка для моделей и правил предметной области
+│   ├── domain/          # Pydantic-модели и Protocol-интерфейсы сервисов
+│   ├── routers/         # HTTP-роутеры и DI-провайдеры
+│   ├── fixtures/        # JSON опроса и статический PDF
+│   └── mocks.py         # Stateless mock-сервисы
 ├── tests/               # Проверки HTTP и настроек
 ├── pyproject.toml       # Зависимости приложения и тестов
 ├── uv.lock              # Зафиксированные версии зависимостей
@@ -96,4 +99,73 @@ server/
 └── README.md
 ```
 
-База данных пока не создаётся и не подключается. Пакеты `database` и `domain` содержат только `__init__.py`.
+База данных пока не создаётся и не подключается.
+
+## 6. Запуск и проверка BFF
+
+Из корня репозитория:
+
+```bash
+cd services/bff
+uv sync --frozen
+uv run uvicorn app.main:app --reload
+uv run pytest -q
+```
+
+`GET /health` остаётся доступен. HTTP-страницы `/docs`, `/redoc` и `/openapi.json`
+по-прежнему отключены; схема доступна программно через `app.openapi()`.
+Для браузерного клиента настройте существующие CORS-параметры: origin фронтенда,
+методы `GET`/`POST`, заголовок `Content-Type` и, если требуется читать имя PDF,
+expose-заголовок `Content-Disposition`. По умолчанию cross-origin доступ не разрешён.
+
+## 7. Mock API
+
+Все пути ниже начинаются с `/api/v1`. JSON использует `snake_case`.
+
+| Метод | Путь | Запрос | Успешный ответ |
+| --- | --- | --- | --- |
+| POST | `/screenings` | `{"survey_id":"rheuma_screening_v1"}` | 201, `ScreeningSession`: `id`, `status`, `survey` |
+| POST | `/screenings/{screening_id}/answers` | `{"question_code":"A1","value":true}` | 200, `AnswerReceipt`: `screening_id`, `answer`, `status` |
+| GET | `/screenings/{screening_id}/results` | — | 200, `ScreeningResult`: идентификаторы, версия весов, статус, балл, риск, red flag, disclaimer |
+| GET | `/screenings/{screening_id}/pdf` | — | 200, `application/pdf`, attachment `screening-{screening_id}.pdf` |
+| GET | `/knowledge-base/articles` | `?limit=20&offset=0` | 200, `ArticlePage`: `items`, `total`, `limit`, `offset` |
+| GET | `/knowledge-base/articles/{slug}` | — | 200, `Article`: `slug`, `title`, `summary`, `body` |
+
+`screening_id` — UUID. `limit`: 1–100, `offset`: от 0.
+Булевы ответы передаются как JSON `true`/`false`, варианты выбора — строкой
+`options[].value`, например `{"question_code":"A6","value":"30-60"}`.
+Числа вместо булевых ответов не принимаются.
+
+Неизвестный ресурс возвращает 404 с `{"detail":"... not found"}`;
+ошибки формы запроса — стандартный FastAPI 422 с массивом `detail`.
+
+### Контракты и замена mock-сервисов
+
+- `app/domain/screening.py`: `ScreeningSurvey` соответствует JSON из
+  `app/fixtures/screening_survey.json`. Вопросы — discriminated union по `type`
+  (`boolean` / `single_choice`). Модель сохраняет веса, red flags, interrupt,
+  списки блоков и диапазоны порогов с `null` как открытой верхней границей.
+- `app/domain/knowledge.py`: модели статей и пагинированного списка.
+- `app/domain/interfaces.py`: асинхронные `ScreeningService` и `KnowledgeBaseService`.
+  Возврат `None` означает отсутствие ресурса; роутер преобразует его в 404.
+- `app/routers/dependencies.py`: место подключения реальных реализаций вместо mock.
+  В тестах можно использовать `app.dependency_overrides[get_screening_service]` и
+  `app.dependency_overrides[get_knowledge_base_service]`.
+
+### Ограничения mock-реализации
+
+- Каждый старт возвращает один и тот же UUID `11111111-1111-4111-8111-111111111111`.
+  Это fixture, а не созданная или сохранённая сессия.
+- Ответы только возвращаются в receipt, не сохраняются. Проверяется форма запроса,
+  но не существование вопроса, соответствие значения его типу или допустимому варианту.
+- Результат всегда один и тот же: `completed`, score `0`, risk `low`, red flag `false`.
+  Он доступен даже без прохождения опроса и **не является оценкой здоровья**.
+- PDF — валидный статический одностраничный макет, без персональных данных и ответов.
+- База знаний содержит одну демонстрационную статью `about-screening`.
+- Scoring, переходы состояния, прерывание по red flag и авторизация не реализованы.
+  В исходном примере `sum_blocks` ссылается на отсутствующие блоки `Б` и `Г`;
+  эти ссылки сохранены и не проверяются. Латинские и кириллические коды не нормализуются.
+- Идемпотентность реальных POST-операций пока не определена: фиксированный mock-ответ
+  не является гарантией безопасного повтора будущей реализации.
+- Используйте только синтетические данные. Перед подключением реальных данных нужны
+  контроль доступа к сессиям, правила хранения и клинически проверенная логика.
