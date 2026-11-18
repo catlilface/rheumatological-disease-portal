@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package rheuma.content.commands.v1;
+
+import "contracts/common/v1/content.proto";
+import "contracts/common/v1/metadata.proto";
+
+// Owner: Content. Author/reviewer identity comes from metadata.actor and IAM,
+// never from fields claiming approval. Exactly one payload is required.
+message ContentCommand {
+  rheuma.common.v1.CommandMetadata metadata = 1;
+  oneof payload {
+    CreateArticle create = 2;
+    UpdateArticle update = 3;
+    SubmitArticleForReview submit_for_review = 4;
+    ApproveArticle approve = 5;
+    PublishArticle publish = 6;
+    UnpublishArticle unpublish = 7;
+    DeleteArticle delete = 8;
+  }
+}
+
+message CreateArticle {
+  rheuma.content.v1.ArticleBody content = 1;
+  // Created as DRAFT; the ID is available from Operation.resources.
+}
+
+// All mutations of existing articles require the exact expected version.
+// A stale version is a conflict, not last-writer-wins. Edits invalidate approval.
+message UpdateArticle {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+  rheuma.content.v1.ArticleBody content = 2;
+}
+
+message SubmitArticleForReview {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+}
+
+// UNDER_REVIEW -> APPROVED; IAM must authorize the medical reviewer role.
+message ApproveArticle {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+}
+
+// Only an approved revision can be published, with reviewer and sources.
+message PublishArticle {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+}
+
+// Immediately remove from public reads; invalidate projections using the next
+// version. Review state returns to DRAFT, since there is no unpublished DB enum.
+message UnpublishArticle {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+}
+
+message DeleteArticle {
+  rheuma.content.v1.ArticleReference expected_article = 1;
+}

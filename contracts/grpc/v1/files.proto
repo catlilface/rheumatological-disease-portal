@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package rheuma.files.grpc.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/screening.proto";
+import "google/protobuf/timestamp.proto";
+
+// File ingestion from Reporting is deliberately not specified by the
+// architecture. This API covers metadata and authorized download only.
+service FilesQueryService {
+  rpc GetFile(GetFileRequest) returns (FileMetadata);
+  rpc DownloadFile(DownloadFileRequest) returns (stream DownloadFileResponse);
+}
+
+message FileMetadata {
+  string file_id = 1;
+  string report_id = 2;
+  rheuma.screening.v1.ResultReference source_result = 3;
+  string filename = 4;
+  string media_type = 5;
+  uint64 size_bytes = 6;
+  google.protobuf.Timestamp created_at = 7;
+  // Expiry of the access permission, not cache TTL or file deletion time.
+  // Duration for MVP screening PDFs is policy, not a hard-coded 24-hour rule
+  // (24 hours is specified for the later cabinet report-export scenario).
+  google.protobuf.Timestamp access_expires_at = 8;
+}
+
+message GetFileRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string file_id = 2;
+}
+
+// Files resolves ownership/source itself, rechecks current IAM access to that
+// source and permission expiry, then audits the export before emitting bytes.
+// An opaque file ID is not authorization; no direct SeaweedFS URL is returned.
+// Permission expiry/revocation forbids new downloads but need not interrupt an
+// existing transfer, and does not imply deleting the stored file.
+message DownloadFileRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string file_id = 2;
+}
+
+// First frame is metadata, subsequent frames are ordered data chunks (<=64 KiB).
+// The full size must match metadata.size_bytes; transport failure is not EOF.
+message DownloadFileResponse {
+  oneof payload {
+    FileMetadata metadata = 1;
+    bytes data = 2;
+  }
+}

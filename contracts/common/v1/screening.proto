@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package rheuma.screening.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message SurveyReference {
+  string survey_id = 1;
+  string weights_version = 2;
+}
+
+// The versioned JSON file is the sole source of questions, options, navigation,
+// weights, thresholds and red-flag rules. definition preserves that JSON shape;
+// it is not a second set of rules authored in protobuf. References are immutable.
+message Survey {
+  SurveyReference reference = 1;
+  google.protobuf.Struct definition = 2;
+  // Show this text before StartScreening and on each screening step.
+  string disclaimer = 3;
+  // Required, immutable identifier of this wording, independent of weights_version.
+  string disclaimer_version = 4;
+}
+
+message ScreeningAnswer {
+  string question_code = 1;
+  // Exactly one value is required; false is a valid boolean answer.
+  oneof value {
+    bool boolean_value = 2;
+    string choice_value = 3;
+  }
+}
+
+message ScoredAnswer {
+  ScreeningAnswer answer = 1;
+  int32 weighted_score = 2;
+}
+
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  SESSION_STATUS_IN_PROGRESS = 1;
+  SESSION_STATUS_COMPLETED = 2;
+  SESSION_STATUS_ABANDONED = 3;
+}
+
+message ScreeningSession {
+  string session_id = 1;
+  SurveyReference survey = 2;
+  SessionStatus status = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp completed_at = 5;
+  repeated ScoredAnswer answers = 6;
+  // A red flag interrupts navigation, not the DB session-status enum. The user
+  // may resume, but the red-flag result cannot be downgraded by later answers.
+  bool interrupted_by_red_flag = 7;
+  // Opaque IAM subject, including for guests; never expose a guest bearer token.
+  string subject_id = 8;
+  // Starts at 1. Same revision as SessionChanged metadata.entity_version,
+  // not the independently versioned screening result.
+  uint64 version = 9;
+}
+
+enum ScreeningLevel {
+  SCREENING_LEVEL_UNSPECIFIED = 0;
+  SCREENING_LEVEL_LOW = 1;
+  SCREENING_LEVEL_MEDIUM = 2;
+  SCREENING_LEVEL_HIGH = 3;
+  SCREENING_LEVEL_RED_FLAG = 4;
+}
+
+message ResultReference {
+  string result_id = 1;
+  // Required, nonzero: consumers must not substitute a different version.
+  uint64 version = 2;
+}
+
+message Recommendation {
+  string code = 1;
+  string text = 2;
+}
+
+// Authoritative output of Screening, never calculated by BFF, Reporting or AI.
+// A yes to any configured red-flag question immediately creates a RED_FLAG
+// result. Continued answers may refine it but must never lower that level.
+message ScreeningResult {
+  ResultReference reference = 1;
+  string session_id = 2;
+  string subject_id = 3;
+  SurveyReference survey = 4;
+  map<string, int32> block_scores = 5;
+  // May be absent if the red-flag interruption prevented a full calculation.
+  optional int32 total_score = 6;
+  bool scoring_complete = 7;
+  repeated string red_flag_codes = 8;
+  ScreeningLevel level = 9;
+  repeated ScoredAnswer contributing_answers = 10;
+  repeated Recommendation recommendations = 11;
+  string disclaimer = 12;
+  google.protobuf.Timestamp created_at = 13;
+}

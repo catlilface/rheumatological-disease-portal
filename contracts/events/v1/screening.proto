@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package rheuma.screening.events.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/screening.proto";
+
+// Source: screening. Protected medical events: restrict topic consumers and
+// never log the payload. Full result snapshots let AI build its own projection
+// without DB access or implicit reads of a different result version.
+message ScreeningEvent {
+  rheuma.common.v1.EventMetadata metadata = 1;
+  oneof payload {
+    SessionChanged session_changed = 2;
+    ResultChanged result_changed = 3;
+    ResultDeleted result_deleted = 4;
+  }
+}
+
+// entity_type = screening_session; entity_id = session_id. Every committed
+// session/answer mutation advances entity_version even before a result exists.
+// Answer values are deliberately absent from this lifecycle notification.
+message SessionChanged {
+  string session_id = 1;
+  rheuma.screening.v1.SurveyReference survey = 2;
+  rheuma.screening.v1.SessionStatus status = 3;
+  bool interrupted_by_red_flag = 4;
+}
+
+// entity_type = screening_result. IDs and versions must equal the snapshot's
+// reference. Used for both initial creation (including immediate red flags)
+// and subsequent revisions; consumers must never downgrade RED_FLAG.
+message ResultChanged {
+  rheuma.screening.v1.ScreeningResult result = 1;
+}
+
+// Tombstone: entity_type = screening_result; metadata supplies ID and deletion
+// version, strictly newer than the last snapshot. Remove projection/context;
+// retain the tombstone version so delayed updates cannot resurrect it.
+message ResultDeleted {
+  string result_id = 1;
+}

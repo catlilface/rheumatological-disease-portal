@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package rheuma.reporting.grpc.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/reporting.proto";
+
+// Preparing a PDF is a Kafka command, not a side effect of these reads.
+service ReportingQueryService {
+  rpc GetReport(GetReportRequest) returns (rheuma.reporting.v1.Report);
+  rpc GetOperation(rheuma.common.v1.GetOperationRequest) returns (rheuma.common.v1.Operation);
+}
+
+message GetReportRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string report_id = 2;
+}

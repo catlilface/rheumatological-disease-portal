@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package rheuma.common.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Compile with the repository root as the import root. IDs are opaque strings (UUIDs
+// where specified by the requirements); versions start at 1. Never reuse tags.
+// UNSPECIFIED enum values and absent required messages are invalid input.
+// Authentication travels over authenticated internal transport, not browser-
+// supplied identity fields. Do not put bearer/refresh tokens in Kafka or logs.
+message ActorContext {
+  string subject_id = 1;
+  string session_id = 2;
+}
+
+message ResourceReference {
+  string resource_type = 1;
+  string resource_id = 2;
+  optional uint64 version = 3;
+}
+
+// All reads of protected resources require a fresh IAM check and access audit.
+// gRPC credentials use authorization metadata; ActorContext is not a credential.
+// Errors use gRPC INVALID_ARGUMENT, UNAUTHENTICATED, PERMISSION_DENIED,
+// NOT_FOUND, FAILED_PRECONDITION, ABORTED or UNAVAILABLE as appropriate.
+// IAM unavailability must fail closed with UNAVAILABLE, not a cached allow.
+message RequestContext {
+  string request_id = 1;
+  ActorContext actor = 2;
+}
+
+// A retry preserves command_id, operation_id and payload. Reusing command_id
+// with a different payload is rejected. The owner rechecks IAM at execution.
+message CommandMetadata {
+  string command_id = 1;
+  string operation_id = 2;
+  uint32 schema_version = 3;
+  ActorContext actor = 4;
+  google.protobuf.Timestamp issued_at = 5;
+  string correlation_id = 6;
+}
+
+// Publish only after commit, via the owner's transactional outbox. Consumers
+// deduplicate event_id and reject stale entity_version, including tombstones.
+// Ordering is per (source, entity_type, entity_id), never global.
+message EventMetadata {
+  string event_id = 1;
+  uint32 schema_version = 2;
+  string source = 3;
+  string entity_type = 4;
+  string entity_id = 5;
+  uint64 entity_version = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+  string operation_id = 8;
+  string causation_id = 9;
+  string correlation_id = 10;
+}
+
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_PENDING = 1;
+  OPERATION_STATE_PROCESSING = 2;
+  OPERATION_STATE_SUCCEEDED = 3;
+  OPERATION_STATE_REJECTED = 4;
+  OPERATION_STATE_FAILED = 5;
+}
+
+message OperationError {
+  // Stable machine-readable code and safe text; no medical data or secrets.
+  string code = 1;
+  string message = 2;
+}
+
+// Pending/processing are nonterminal, including while safely retrying transient
+// errors. Rejected means authorization/business refusal; failed is a terminal
+// technical failure. Unknown/not-yet-visible IDs return NOT_FOUND, not FAILED.
+// A timeout reading this object says nothing about whether the write committed.
+message Operation {
+  string operation_id = 1;
+  OperationState state = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  repeated ResourceReference resources = 5;
+  // Present only for rejected/failed operations.
+  OperationError error = 6;
+}
+
+// Each command owner exposes GetOperation; there is no shared status database.
+message GetOperationRequest {
+  RequestContext context = 1;
+  string operation_id = 2;
+}
+
+message PageRequest {
+  // 0 selects 20; otherwise 1–100.
+  int32 page_size = 1;
+  string page_token = 2;
+  // Zero-based offset into the filtered results. Omit both selectors for the
+  // first page; a supplied offset plus a nonempty token is INVALID_ARGUMENT.
+  optional uint64 offset = 3;
+}

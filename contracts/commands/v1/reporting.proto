@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package rheuma.reporting.commands.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/reporting.proto";
+
+// Owner: Reporting. IAM is checked before reading the exact source result.
+// Deduplicate command_id; safe retries must not create duplicate reports.
+message ReportingCommand {
+  rheuma.common.v1.CommandMetadata metadata = 1;
+  oneof payload {
+    GenerateScreeningPdf generate_screening_pdf = 2;
+  }
+}
+
+message GenerateScreeningPdf {
+  rheuma.reporting.v1.ReportSpecification specification = 1;
+  // Operation.resources identifies the report, not a public download URL.
+  // Reusing an existing PDF never extends its permission or bypasses Files/IAM.
+}
