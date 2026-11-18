@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-cqrs-outbox-title architecture-cqrs-outbox-desc" id="architecture-cqrs-outbox-root">
+        <title id="architecture-cqrs-outbox-title">CQRS и transactional outbox</title>
+        <desc id="architecture-cqrs-outbox-desc">BFF получает подтверждение приёма команды, владелец проверяет IAM и фиксирует изменение с событием в outbox, после чего публикует событие и обслуживает чтение по gRPC.</desc>
+        <defs>
+      <style>#architecture-cqrs-outbox-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #architecture-cqrs-outbox-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #architecture-cqrs-outbox-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#architecture-cqrs-outbox-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="architecture-cqrs-outbox-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="architecture-cqrs-outbox-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="architecture-cqrs-outbox-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+
+          <!-- OPTIONAL: dot-pattern background. Uncomment the <pattern> and the second <rect> below if you want the dotted paper look. -->
+          <!--
+          <pattern id="architecture-cqrs-outbox-dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          -->
+        <marker id="architecture-cqrs-outbox-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <!-- <rect width="100%" height="100%" fill="url(#architecture-cqrs-outbox-dots)" opacity="0.55"/> -->
+
+        <text x="40" y="64" font-family="'Instrument Serif', 'Noto Serif', serif" font-size="28" font-weight="400" fill="#2d3142" text-anchor="start">CQRS: приём команды ≠ выполнение</text>
+<text x="40" y="92" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Outbox связывает изменение и событие одной локальной транзакцией. Чтение остаётся синхронным.</text>
+<line x1="120" y1="192" x2="120" y2="600" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="328" y1="192" x2="328" y2="600" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="600" y1="192" x2="600" y2="600" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="824" y1="192" x2="824" y2="600" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="1160" y1="192" x2="1160" y2="600" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<path d="M120,232 H328" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow-open)"/>
+<rect x="198.0" y="208" width="52" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="224.0" y="220" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">КОМАНДА</text>
+<path d="M328,268 H120" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow)"/>
+<rect x="194.0" y="244" width="60" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="224.0" y="256" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ACK → 202</text>
+<path d="M328,304 H600" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow-open)"/>
+<rect x="436.0" y="280" width="56" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="464.0" y="292" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ДОСТАВКА</text>
+<path d="M600,340 H824" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-cqrs-outbox-arrow-link)"/>
+<rect x="672.0" y="316" width="80" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="712.0" y="328" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ПРОВЕРКА ПРАВ</text>
+<path d="M824,376 H600" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow)"/>
+<rect x="682.0" y="352" width="60" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="712.0" y="364" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">РАЗРЕШЕНО</text>
+<path d="M600,412 H1160" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#architecture-cqrs-outbox-arrow-accent)"/>
+<rect x="840.0" y="388" width="80" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="880.0" y="400" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ДАННЫЕ+OUTBOX</text>
+<path d="M1160,448 H600" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow)"/>
+<rect x="856.0" y="424" width="48" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="880.0" y="436" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">COMMIT</text>
+<path d="M600,484 H328" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow-open)"/>
+<rect x="438.0" y="460" width="52" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="464.0" y="472" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">СОБЫТИЕ</text>
+<path d="M120,540 H600" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-cqrs-outbox-arrow-link)"/>
+<rect x="342.0" y="516" width="36" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="360.0" y="528" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">GRPC</text>
+<path d="M600,576 H120" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-cqrs-outbox-arrow)"/>
+<rect x="336.0" y="552" width="48" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="360.0" y="564" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ДАННЫЕ</text>
+<rect x="40" y="112" width="160" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="40" y="112" width="160" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" />
+<rect x="52" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="92" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">УЧАСТНИК</text>
+<text x="56" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">BFF</text>
+<text x="56" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Вход и чтение</text>
+<rect x="248" y="112" width="160" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="248" y="112" width="160" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" />
+<rect x="260" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="300" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">УЧАСТНИК</text>
+<text x="264" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">Kafka</text>
+<text x="264" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Доставка</text>
+<rect x="500" y="112" width="200" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="500" y="112" width="200" height="80" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08" />
+<rect x="512" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="552" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">УЧАСТНИК</text>
+<text x="516" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">Сервис-владелец</text>
+<text x="516" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Обработка и издатель</text>
+<rect x="744" y="112" width="160" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="744" y="112" width="160" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" />
+<rect x="756" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="796" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">УЧАСТНИК</text>
+<text x="760" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">IAM</text>
+<text x="760" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Актуальные права</text>
+<rect x="1080" y="112" width="160" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="1080" y="112" width="160" height="80" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05" />
+<rect x="1092" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="1132" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">ХРАНИЛИЩЕ</text>
+<text x="1096" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">БД + outbox</text>
+<text x="1096" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Данные и статус</text>
+<text x="40" y="624" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">202: операция принята. Итог и нужную версию данных клиент узнаёт отдельно по operationId.</text>
+<text x="40" y="644" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Показан успешный путь. Чтение у владельца не обязано ждать отправки события или обновления чужих проекций.</text>
+<line x1="40" y1="660" x2="1240" y2="660" stroke="#bfc0c0"/>
+<line x1="40" y1="688" x2="68" y2="688" stroke="#2e5aa8" stroke-width="1.2"/>
+<text x="80" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Вызов / чтение</text>
+<line x1="320" y1="688" x2="348" y2="688" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="360" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Возврат или доставка¹</text>
+<line x1="720" y1="688" x2="748" y2="688" stroke="#bf4520" stroke-width="1.2"/>
+<text x="760" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Атомарная запись</text>
+<line x1="980" y1="688" x2="1008" y2="688" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="1020" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">¹ У доставки открытый наконечник</text>
+
+      </svg>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-pdf-access-title architecture-pdf-access-desc" id="architecture-pdf-access-root">
+        <title id="architecture-pdf-access-title">Доступ к PDF через IAM</title>
+        <desc id="architecture-pdf-access-desc">Files выдаёт PDF из закрытого SeaweedFS только после актуальной проверки IAM и срока разрешения, иначе новая выдача отклоняется.</desc>
+        <defs>
+      <style>#architecture-pdf-access-root { --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #bf4520;
+      --font-sans:     'Geist', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif', 'Noto Serif KR', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace; }
+      #architecture-pdf-access-root { font-family: var(--font-sans); color: var(--color-ink); }
+      #architecture-pdf-access-root .diagram-container { width: 100%; overflow-x: auto; }
+      @media print {
+#architecture-pdf-access-root .diagram-container { overflow-x: visible; }
+}</style>
+          <marker id="architecture-pdf-access-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="architecture-pdf-access-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+          <marker id="architecture-pdf-access-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+
+          <!-- OPTIONAL: dot-pattern background. Uncomment the <pattern> and the second <rect> below if you want the dotted paper look. -->
+          <!--
+          <pattern id="architecture-pdf-access-dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          -->
+        <marker id="architecture-pdf-access-arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <!-- <rect width="100%" height="100%" fill="url(#architecture-pdf-access-dots)" opacity="0.55"/> -->
+
+        <text x="40" y="64" font-family="'Instrument Serif', 'Noto Serif', serif" font-size="28" font-weight="400" fill="#2d3142" text-anchor="start">Готовый PDF не означает право на скачивание</text>
+<text x="40" y="92" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Files проверяет актуальный доступ и срок разрешения при каждом новом запросе.</text>
+<rect x="80" y="376" width="1152" height="248" rx="4" fill="#2d3142" stroke="#bfc0c0" stroke-width="1" fill-opacity="0.02" />
+<rect x="80" y="376" width="40" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="100" y="388" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#4f5d75" text-anchor="middle">ALT</text>
+<text x="96" y="408" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#4f5d75" text-anchor="start">[права подтверждены, TTL разрешения не истёк]</text>
+<line x1="88" y1="544" x2="1224" y2="544" stroke="#bfc0c0" stroke-dasharray="4,3"/>
+<text x="96" y="568" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#4f5d75" text-anchor="start">[отказ / недоступность IAM либо истёкший TTL]</text>
+<line x1="128" y1="192" x2="128" y2="624" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="448" y1="192" x2="448" y2="624" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="736" y1="192" x2="736" y2="624" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<line x1="1136" y1="192" x2="1136" y2="624" stroke="#2d3142" stroke-dasharray="3,3" stroke-opacity="0.20"/>
+<path d="M128,232 H448" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-pdf-access-arrow-link)"/>
+<rect x="252.0" y="208" width="72" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="288.0" y="220" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">СКАЧАТЬ PDF</text>
+<path d="M448,284 H736" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-pdf-access-arrow-link)"/>
+<rect x="552.0" y="260" width="80" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="592.0" y="272" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ПРОВЕРКА ПРАВ</text>
+<path d="M736,336 H448" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-pdf-access-arrow)"/>
+<rect x="566.0" y="312" width="52" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="592.0" y="324" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">РЕШЕНИЕ</text>
+<path d="M448,444 H1136" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#architecture-pdf-access-arrow-link)"/>
+<rect x="758.0" y="420" width="68" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="792.0" y="432" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ЧТЕНИЕ PDF</text>
+<path d="M1136,480 H448" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-pdf-access-arrow)"/>
+<rect x="774.0" y="456" width="36" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="792.0" y="468" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">ФАЙЛ</text>
+<path d="M448,516 H128" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#architecture-pdf-access-arrow-accent)"/>
+<rect x="272.0" y="492" width="32" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="288.0" y="504" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">PDF</text>
+<path d="M448,600 H128" fill="none" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#architecture-pdf-access-arrow)"/>
+<rect x="258.0" y="576" width="60" height="16" rx="2" fill="#f5f5f5" stroke="none" stroke-width="1" /><text x="288.0" y="588" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="400" fill="#5a6580" text-anchor="middle">БЕЗ ФАЙЛА</text>
+<rect x="40" y="112" width="176" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="40" y="112" width="176" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" />
+<rect x="52" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="92" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">СЕРВИС</text>
+<text x="56" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">BFF</text>
+<text x="56" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">HTTP-вход браузера</text>
+<rect x="348" y="112" width="200" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="348" y="112" width="200" height="80" rx="6" fill="#bf4520" stroke="#bf4520" stroke-width="1" fill-opacity="0.08" />
+<rect x="360" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="400" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">СЕРВИС</text>
+<text x="364" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">Files</text>
+<text x="364" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Метаданные и выдача</text>
+<rect x="648" y="112" width="176" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="648" y="112" width="176" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1" />
+<rect x="660" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="700" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">СЕРВИС</text>
+<text x="664" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">IAM</text>
+<text x="664" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Решение о доступе</text>
+<rect x="1036" y="112" width="200" height="80" rx="6" fill="#f5f5f5" stroke="none" stroke-width="1" />
+<rect x="1036" y="112" width="200" height="80" rx="6" fill="#2d3142" stroke="#4f5d75" stroke-width="1" fill-opacity="0.05" />
+<rect x="1048" y="120" width="80" height="16" rx="2" fill="#f5f5f5" stroke="#bfc0c0" stroke-width="1" />
+<text x="1088" y="131" font-family="'Geist Mono', ui-monospace, monospace" font-size="8" font-weight="500" fill="#5a6580" text-anchor="middle">ХРАНИЛИЩЕ</text>
+<text x="1052" y="156" font-family="'Geist', system-ui, sans-serif" font-size="12" font-weight="600" fill="#2d3142" text-anchor="start">SeaweedFS</text>
+<text x="1052" y="176" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Закрытое хранилище</text>
+<text x="40" y="644" font-family="'Geist', system-ui, sans-serif" font-size="11" font-weight="400" fill="#4f5d75" text-anchor="start">Истечение разрешения закрывает доступ, но не удаляет PDF. Уже начатая передача может завершиться.</text>
+<line x1="40" y1="660" x2="1240" y2="660" stroke="#bfc0c0"/>
+<line x1="40" y1="688" x2="68" y2="688" stroke="#2e5aa8" stroke-width="1.2"/>
+<text x="80" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Синхронный запрос</text>
+<line x1="400" y1="688" x2="428" y2="688" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="440" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Ответ / отказ</text>
+<line x1="800" y1="688" x2="828" y2="688" stroke="#bf4520" stroke-width="1.2"/>
+<text x="840" y="692" font-family="'Geist', system-ui, sans-serif" font-size="10" font-weight="400" fill="#4f5d75" text-anchor="start">Разрешённая выдача</text>
+
+      </svg>
