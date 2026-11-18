@@ -47,6 +47,15 @@ server {
     proxy_request_buffering off;
   }
 
+  location ~ ^/policy/[a-z-]+/?$ {
+    rewrite ^(/policy/[a-z-]+)/?$ $1.pdf last;
+  }
+
+  location /policy/ {
+    add_header Cache-Control "no-cache";
+    try_files $uri =404;
+  }
+
   # SPA fallback: client-side routes are served by index.html
   location / {
     add_header Cache-Control "no-cache";
