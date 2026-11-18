@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { applyTheme, readTheme } from './theme'
 import AboutPage from './AboutPage'
 import { CookieNotice } from './CookieNotice'
 import { readCookieConsent, saveCookieConsent } from './cookieConsent'
@@ -53,6 +54,12 @@ function DocumentsPage() {
 function App() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
   const [consent, setConsent] = useState(readCookieConsent)
+  const [theme, setTheme] = useState(readTheme)
+  const rememberTheme = consent?.functional === true
+  useLayoutEffect(
+    () => applyTheme(theme, rememberTheme),
+    [theme, rememberTheme],
+  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   const cookieSettingsButton = useRef<HTMLButtonElement>(null)
   const title =
@@ -117,6 +124,14 @@ function App() {
           <nav className="footer__nav" aria-label="Информация о портале">
             <a href="/documents">Документы портала</a>
             <a href="/about">Сведения об операторе</a>
+            <button
+              type="button"
+              className="text-button"
+              aria-pressed={theme === 'dark'}
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            >
+              Тёмная тема
+            </button>
             <button
               type="button"
               className="text-button"

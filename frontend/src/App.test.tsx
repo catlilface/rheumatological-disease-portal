@@ -91,3 +91,28 @@ describe('App', () => {
     )
   })
 })
+
+it('switches theme, remembers it with functional consent and clears it on withdrawal', () => {
+  const { unmount } = render(<App />)
+  const toggle = screen.getByRole('button', { name: 'Тёмная тема' })
+  expect(document.documentElement.dataset.theme).toBe('light')
+  fireEvent.click(toggle)
+  expect(document.documentElement.dataset.theme).toBe('dark')
+  expect(localStorage.getItem('portal-theme')).toBeNull()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Принять необязательные' }),
+  )
+  unmount()
+  render(<App />)
+  expect(screen.getByRole('button', { name: 'Тёмная тема' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Настройки cookie' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Отклонить необязательные' }),
+  )
+  expect(localStorage.getItem('portal-theme')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Тёмная тема' }))
+  expect(document.documentElement.dataset.theme).toBe('light')
+})

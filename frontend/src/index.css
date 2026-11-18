@@ -361,3 +361,16 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #111b26;
+  --color-surface: #192838;
+  --color-text: #edf4fb;
+  --color-muted: #bdcedd;
+  --color-accent: #91c8ff;
+  --color-accent-hover: #c2e1ff;
+  --color-accent-soft: #213a50;
+  --color-border: #43586d;
+  --color-highlight: #102438;
+}
