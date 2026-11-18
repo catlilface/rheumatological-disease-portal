@@ -1,4 +1,25 @@
 services:
+  bff:
+    build:
+      context: .
+      dockerfile: services/bff/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Local development broker; production requires replication and authentication.
   kafka:
     image: apache/kafka:4.4.0
