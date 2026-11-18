@@ -1,3 +1,4 @@
+import './cookie-notice.css'
 import { useEffect, useRef, useState } from 'react'
 
 import {
@@ -5,7 +6,7 @@ import {
   allRejected,
   optionalCookies,
   type CookieConsent,
-} from './cookieConsent'
+} from '../model/consent'
 
 type CookieNoticeProps = {
   consent: CookieConsent | null

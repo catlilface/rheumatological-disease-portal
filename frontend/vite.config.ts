@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react'
 import type { Plugin, ViteDevServer } from 'vite'
 import { defineConfig } from 'vitest/config'
-import { policyLinks } from './src/policies.js'
+import { policyLinks } from './src/entities/policy/index.js'
 
 function policyDocuments(): Plugin {
   const pdfs = new Map(policyLinks.map(({ href }) => [href, `${href}.pdf`]))
@@ -29,6 +29,6 @@ export default defineConfig({
   plugins: [react(), policyDocuments()],
   test: {
     environment: 'jsdom',
-    setupFiles: ['./src/setupTests.ts'],
+    setupFiles: ['./src/app/testing/setup.ts'],
   },
 })

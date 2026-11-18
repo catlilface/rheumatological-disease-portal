@@ -1,15 +1,10 @@
-import { readCookieConsent } from './cookieConsent'
-
 export type Theme = 'light' | 'dark'
 
 const storageKey = 'portal-theme'
 
-export function readTheme(): Theme {
+export function readTheme(remember: boolean): Theme {
   try {
-    if (
-      readCookieConsent()?.functional &&
-      localStorage.getItem(storageKey) === 'dark'
-    ) {
+    if (remember && localStorage.getItem(storageKey) === 'dark') {
       return 'dark'
     }
   } catch {
