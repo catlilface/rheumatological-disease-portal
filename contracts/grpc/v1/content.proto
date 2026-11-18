@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package rheuma.content.grpc.v1;
+
+import "contracts/common/v1/content.proto";
+import "contracts/common/v1/metadata.proto";
+
+service ContentQueryService {
+  rpc ListPublishedArticles(ListPublishedArticlesRequest) returns (ListPublishedArticlesResponse);
+  rpc GetPublishedArticle(GetPublishedArticleRequest) returns (rheuma.content.v1.Article);
+  // Author/reviewer read: IAM must authorize access to unpublished revisions.
+  rpc GetArticle(GetArticleRequest) returns (rheuma.content.v1.Article);
+  // Same protected editorial read, but selects the current revision in any
+  // review state. Use the returned reference when resolving an edit conflict.
+  rpc GetCurrentArticle(GetCurrentArticleRequest) returns (rheuma.content.v1.Article);
+  rpc GetDoctorRoute(GetDoctorRouteRequest) returns (rheuma.content.v1.DoctorRoute);
+  rpc GetOperation(rheuma.common.v1.GetOperationRequest) returns (rheuma.common.v1.Operation);
+}
+
+// Order by published_at descending, then numeric article ID ascending for ties.
+message ListPublishedArticlesRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  rheuma.common.v1.PageRequest page = 2;
+  optional string disease_tag = 3;
+}
+
+message ListPublishedArticlesResponse {
+  repeated rheuma.content.v1.ArticleSummary articles = 1;
+  string next_page_token = 2;
+  // Exact number of published articles matching the filter before pagination,
+  // from the same snapshot, even beyond the final row. Always set, including
+  // zero: absence means the server did not provide a count, not an empty list.
+  optional uint64 total = 3;
+}
+
+// Slug lookup returns only currently published, reviewed content.
+message GetPublishedArticleRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string slug = 2;
+}
+
+message GetArticleRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  rheuma.content.v1.ArticleReference article = 2;
+}
+
+message GetCurrentArticleRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string article_id = 2;
+}
+
+message GetDoctorRouteRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string route_id = 2;
+}

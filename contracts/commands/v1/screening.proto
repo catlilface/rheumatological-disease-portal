@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package rheuma.screening.commands.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/screening.proto";
+import "google/protobuf/timestamp.proto";
+
+// Owner: Screening. Only trusted producers may submit this envelope. Exactly
+// one payload and metadata are required. Broker acceptance is not completion;
+// use ScreeningQueryService.GetOperation with metadata.operation_id.
+// After start, expected_session_version is the nonzero revision the user edited,
+// not a fresh lookup by the BFF at send time. The owner atomically compares it,
+// applies the mutation, and advances the revision by one; Operation.resources
+// identifies the session and its committed version. Mismatch: REJECTED with
+// SESSION_VERSION_CONFLICT, no mutation or event. Reload GetSession before a
+// new edit. A redelivery of the same command reuses its recorded outcome before
+// checking the revision, so a successful retry does not become a conflict.
+message ScreeningCommand {
+  rheuma.common.v1.CommandMetadata metadata = 1;
+  oneof payload {
+    StartScreening start = 2;
+    SaveAnswer save_answer = 3;
+    CompleteScreening complete = 4;
+    ContinueAfterRedFlag continue_after_red_flag = 5;
+    AbandonScreening abandon = 6;
+  }
+}
+
+message StartScreening {
+  // Exact file/weights version shown to the user; never silently upgrade it.
+  rheuma.screening.v1.SurveyReference survey = 1;
+  // Echo the nonempty Survey.disclaimer_version displayed before start. If
+  // it no longer matches the wording for this survey, reject and redisplay;
+  // never substitute a newer version on behalf of the user.
+  string disclaimer_version = 2;
+  // Must be explicitly true from the user: not inferred from starting a session.
+  bool disclaimer_accepted = 3;
+  // Time the BFF received the acknowledgement. Record it and its version with
+  // the new session; both are unchanged on redelivery.
+  google.protobuf.Timestamp disclaimer_accepted_at = 4;
+  // The owner creates the session; its ID is returned in Operation.resources.
+  // Guest identity comes from IAM metadata.actor, not a client subject/token.
+}
+
+// Upsert one answer per (session_id, question_code), not an append-only insert.
+// The owner validates the value against the session's JSON file and computes
+// weight itself. Any red flag is persisted immediately with its result/outbox,
+// without waiting for CompleteScreening or for an AI response.
+message SaveAnswer {
+  string session_id = 1;
+  rheuma.screening.v1.ScreeningAnswer answer = 2;
+  uint64 expected_session_version = 3;
+}
+
+message CompleteScreening {
+  string session_id = 1;
+  uint64 expected_session_version = 2;
+}
+
+// Resume navigation while retaining all detected red flags and RED_FLAG level.
+message ContinueAfterRedFlag {
+  string session_id = 1;
+  uint64 expected_session_version = 2;
+}
+
+message AbandonScreening {
+  string session_id = 1;
+  uint64 expected_session_version = 2;
+}

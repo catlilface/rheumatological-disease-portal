@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package rheuma.content.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum ReviewStatus {
+  REVIEW_STATUS_UNSPECIFIED = 0;
+  REVIEW_STATUS_DRAFT = 1;
+  REVIEW_STATUS_UNDER_REVIEW = 2;
+  REVIEW_STATUS_APPROVED = 3;
+  REVIEW_STATUS_PUBLISHED = 4;
+}
+
+message ArticleReference {
+  // Decimal representation of knowledge_articles.id, not a database join key.
+  string article_id = 1;
+  uint64 version = 2;
+}
+
+message Source {
+  string title = 1;
+  string url = 2;
+}
+
+// Full replacement content for authoring, not a partial-update payload.
+message ArticleBody {
+  string slug = 1;
+  // Open code, e.g. RA, GOUT, SLE or SPA; not limited to the MVP set.
+  string disease_tag = 2;
+  string title = 3;
+  string summary = 4;
+  string body_markdown = 5;
+  repeated Source sources = 6;
+}
+
+message Reviewer {
+  string subject_id = 1;
+  string display_name = 2;
+}
+
+// A content revision and its publication/review state share one monotonically
+// increasing version. Editing published text requires a new review cycle.
+message Article {
+  ArticleReference reference = 1;
+  ArticleBody content = 2;
+  ReviewStatus status = 3;
+  string author_id = 4;
+  Reviewer reviewer = 5;
+  google.protobuf.Timestamp published_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message ArticleSummary {
+  ArticleReference reference = 1;
+  string slug = 2;
+  string disease_tag = 3;
+  string title = 4;
+  string summary = 5;
+  Reviewer reviewer = 6;
+  google.protobuf.Timestamp published_at = 7;
+}
+
+// The doctor-route page is curated Content, not an AI-generated medical action.
+message DoctorRoute {
+  string route_id = 1;
+  uint64 version = 2;
+  string title = 3;
+  string body_markdown = 4;
+  repeated Source sources = 5;
+  Reviewer reviewer = 6;
+  google.protobuf.Timestamp published_at = 7;
+}

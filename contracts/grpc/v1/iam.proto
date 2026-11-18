@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package rheuma.iam.grpc.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "google/protobuf/timestamp.proto";
+
+// Token issuance/refresh are the intentional exception to Kafka-only writes.
+// These calls require authenticated service transport. Never log token payloads.
+service IamService {
+  rpc CreateGuestSession(CreateGuestSessionRequest) returns (TokenPair);
+  // Initial login for provisioned admins/medical reviewers, not registration.
+  rpc SignInStaff(SignInStaffRequest) returns (TokenPair);
+  rpc RefreshTokens(RefreshTokensRequest) returns (TokenPair);
+  rpc Authenticate(AuthenticateRequest) returns (Principal);
+  rpc CheckAccess(CheckAccessRequest) returns (AccessDecision);
+}
+
+enum UserRole {
+  USER_ROLE_UNSPECIFIED = 0;
+  USER_ROLE_PATIENT = 1;
+  USER_ROLE_ADMIN = 2;
+  USER_ROLE_MEDICAL_REVIEWER = 3;
+}
+
+message CreateGuestSessionRequest {
+  // Stable across transport retries; IAM must not create duplicate sessions.
+  string request_id = 1;
+}
+
+// Only over confidential, service-authenticated transport. IAM looks up the
+// stored email HMAC and verifies the password hash; roles come from IAM alone.
+// Return the same UNAUTHENTICATED error for ineligible or invalid credentials.
+// Neither credentials nor tokens belong in logs, traces or Kafka messages.
+message SignInStaffRequest {
+  string request_id = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message RefreshTokensRequest {
+  string request_id = 1;
+  string refresh_token = 2;
+}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  google.protobuf.Timestamp access_expires_at = 3;
+  google.protobuf.Timestamp refresh_expires_at = 4;
+  Principal principal = 5;
+}
+
+message AuthenticateRequest {
+  string request_id = 1;
+  // The BFF exchanges the browser credential for trusted identity context.
+  string access_token = 2;
+}
+
+message Principal {
+  rheuma.common.v1.ActorContext actor = 1;
+  bool is_guest = 2;
+  repeated UserRole roles = 3;
+  google.protobuf.Timestamp session_expires_at = 4;
+}
+
+message CheckAccessRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  // Action identifiers are owned by IAM policy, not browser-provided roles.
+  string action = 2;
+  rheuma.common.v1.ResourceReference resource = 3;
+  // Resolved by the trusted resource owner, never accepted from the browser.
+  string resource_owner_subject_id = 4;
+}
+
+message AccessDecision {
+  string decision_id = 1;
+  // Absent/default is deny. Transport errors are never permission to proceed.
+  bool allowed = 2;
+  string reason_code = 3;
+  google.protobuf.Timestamp evaluated_at = 4;
+}

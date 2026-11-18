@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rheuma.reporting.events.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/reporting.proto";
+
+// Source: reporting; entity_type = report. Snapshot ID/version must match
+// metadata. Report readiness is independent of Screening result availability.
+message ReportingEvent {
+  rheuma.common.v1.EventMetadata metadata = 1;
+  oneof payload {
+    ReportChanged report_changed = 2;
+  }
+}
+
+// READY means the file is stored and registered with Files, not permission to
+// download it. Every new download still checks current IAM rights and expiry.
+// FAILED describes report generation, not failure of the source screening.
+message ReportChanged {
+  rheuma.reporting.v1.Report report = 1;
+}

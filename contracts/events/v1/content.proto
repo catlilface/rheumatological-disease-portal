@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package rheuma.content.events.v1;
+
+import "contracts/common/v1/content.proto";
+import "contracts/common/v1/metadata.proto";
+
+// Source: content; entity_type = knowledge_article. Emit on every revision,
+// review/publication transition and deletion, not just initial publication.
+message ContentEvent {
+  rheuma.common.v1.EventMetadata metadata = 1;
+  oneof payload {
+    ArticleChanged article_changed = 2;
+    ArticleDeleted article_deleted = 3;
+  }
+}
+
+// Full snapshot; metadata ID/version must match article.reference. AI may use
+// only PUBLISHED revisions with reviewer/sources. Any other status invalidates
+// the previous public context/index entry immediately upon event application.
+// Search hits must still match the current projection version and publication
+// status before use; an embedding/index hit alone is never authoritative.
+message ArticleChanged {
+  rheuma.content.v1.Article article = 1;
+}
+
+// Deletion version is in metadata and must exceed every prior article version.
+// Consumers remove all derived content and retain the versioned tombstone.
+message ArticleDeleted {
+  string article_id = 1;
+}

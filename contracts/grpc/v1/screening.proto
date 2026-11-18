@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package rheuma.screening.grpc.v1;
+
+import "contracts/common/v1/metadata.proto";
+import "contracts/common/v1/screening.proto";
+
+// Read-only. Session/answer/result mutations are commands on Kafka.
+service ScreeningQueryService {
+  rpc GetSurvey(GetSurveyRequest) returns (rheuma.screening.v1.Survey);
+  rpc GetSession(GetSessionRequest) returns (rheuma.screening.v1.ScreeningSession);
+  rpc GetSessionResult(GetSessionResultRequest) returns (rheuma.screening.v1.ScreeningResult);
+  rpc GetResult(GetResultRequest) returns (rheuma.screening.v1.ScreeningResult);
+  rpc GetOperation(rheuma.common.v1.GetOperationRequest) returns (rheuma.common.v1.Operation);
+}
+
+message GetSurveyRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string survey_id = 2;
+  // Absent selects the current published file. A supplied version is exact.
+  optional string weights_version = 3;
+}
+
+message GetSessionRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string session_id = 2;
+}
+
+// Explicit latest-result lookup for the UI; FAILED_PRECONDITION if not ready.
+message GetSessionResultRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  string session_id = 2;
+}
+
+// Reporting and other version-bound consumers use only this exact lookup.
+// Missing versions return NOT_FOUND; no fallback to current/previous results.
+message GetResultRequest {
+  rheuma.common.v1.RequestContext context = 1;
+  rheuma.screening.v1.ResultReference result = 2;
+}

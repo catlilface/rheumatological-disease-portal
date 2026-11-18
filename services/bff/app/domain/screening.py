@@ -1,9 +1,9 @@
 """Survey definitions and screening API contracts; no scoring rules are executed here."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, Field, StrictBool, StringConstraints
+from pydantic import BaseModel, Field, StrictBool, StringConstraints, model_validator
 
 NonEmptyString = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 
@@ -94,7 +94,15 @@ class ScreeningResult(BaseModel):
     survey_id: NonEmptyString
     weights_version: NonEmptyString
     status: ScreeningStatus
-    score: float
-    risk_level: Literal["low", "medium", "high"]
+    score: float | None = None
+    risk_level: Literal["low", "medium", "high", "red_flag"]
     red_flag: bool
     disclaimer: str
+
+    @model_validator(mode="after")
+    def validate_result(self) -> Self:
+        if self.red_flag != (self.risk_level == "red_flag"):
+            raise ValueError("red_flag must agree with risk_level")
+        if self.score is None and not self.red_flag:
+            raise ValueError("a score is required for a non-red-flag result")
+        return self
