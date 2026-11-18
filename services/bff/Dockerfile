@@ -8,14 +8,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app/server
 
-COPY server/pyproject.toml server/uv.lock server/.python-version ./
+COPY services/bff/pyproject.toml services/bff/uv.lock services/bff/.python-version ./
 
 RUN uv sync --locked --no-dev --no-install-project
 
-COPY server/app ./app
+COPY services/bff/app ./app
 
 RUN uv sync --locked --no-dev --no-editable \
-    && useradd --create-home --user-group --uid 10001 app
+    && addgroup -S app \
+    && adduser -S -D -u 10001 -G app app
 
 ENV PATH="/app/server/.venv/bin:$PATH"
 
