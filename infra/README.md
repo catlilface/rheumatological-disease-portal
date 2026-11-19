@@ -22,6 +22,7 @@ mkdir -p .secrets
 test -s .secrets/postgres-password || openssl rand -hex 32 > .secrets/postgres-password
 export COMPOSE_PROJECT_NAME=rdp-mvp
 docker compose build  # отдельный образ каждого приложения
+cp .env.example .env  # заполнить своими значениями
 docker compose up -d --no-build --wait
 docker compose ps
 curl -fsS http://127.0.0.1:8000/health
@@ -96,7 +97,3 @@ bash infra/smoke.sh k8s
 Проверки независимы: можно выполнить только нужную команду. При успехе каждый скрипт выводит `OK: …`; при ошибке завершается с ненулевым кодом.
 
 Проверка транспорта использует тестовый топик `dev.content.commands.v1`: приём команды не подтверждает выполнение бизнес-операции. При ошибке смотрите `docker compose logs <имя>` или `kubectl -n rdp-mvp describe pod <имя>` и `kubectl -n rdp-mvp logs <имя>`.
-
-## Границы и срок MIS-28
-
-Ответственный: Jaromir. Старт подготовки — **19.11.2026**. При закрытых MIS-26 и MIS-22 ориентир — **24.11.2026** (четыре рабочих дня, день старта включён). Сборка BFF и файлы контрактов присутствуют в репозитории. Статусы зависимостей и календарь цикла в Plane требуют подтверждения владельцем задачи; этот runbook не меняет карточку в трекере.
