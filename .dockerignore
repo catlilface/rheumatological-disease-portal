@@ -1,5 +1,7 @@
 .git
 .superpowers
+.secrets
+.pi
 .agents
 .codex
 .aws

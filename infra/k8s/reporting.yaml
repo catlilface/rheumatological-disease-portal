@@ -1,0 +1,61 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reporting
+spec:
+  selector:
+    app: reporting
+  ports:
+  - name: client
+    port: 50051
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &1
+      app: reporting
+  template:
+    metadata:
+      labels: *1
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: reporting
+        image: rdp-reporting:mvp
+        ports:
+        - containerPort: 50051
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka:19092
+        readinessProbe:
+          grpc:
+            port: 50051
+          periodSeconds: 10
+          timeoutSeconds: 8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: reporting
+spec:
+  podSelector:
+    matchLabels:
+      app: reporting
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - bff
+    ports:
+    - protocol: TCP
+      port: 50051

@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.routers import knowledge, screenings
@@ -31,6 +34,21 @@ app.add_middleware(
 app.add_middleware(
     TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts, www_redirect=False,
 )
+
+
+@app.middleware("http")
+async def log_exchange(request: Request, call_next):
+    call = uuid4().hex
+    logger.info("http.received call={} method={}", call, request.method)
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.error("http.response call={} status=500", call)
+        raise
+    # Log the route template, never query strings, IDs, cookies or response bodies.
+    route = getattr(request.scope.get("route"), "path", "unmatched")
+    logger.info("http.response call={} route={} status={}", call, route, response.status_code)
+    return response
 
 
 app.include_router(screenings.router, prefix="/api/v1")

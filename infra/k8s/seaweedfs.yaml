@@ -1,0 +1,83 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweedfs
+spec:
+  selector:
+    app: seaweedfs
+  ports:
+  - name: client
+    port: 8888
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: seaweedfs
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &1
+      app: seaweedfs
+  serviceName: seaweedfs
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  template:
+    metadata:
+      labels: *1
+    spec:
+      # IAM_PORT from Kubernetes service links conflicts with weed's iam.port flag.
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: seaweedfs
+        image: chrislusf/seaweedfs:4.54
+        ports:
+        - containerPort: 8888
+        args:
+        - server
+        - "-dir=/data"
+        - "-ip=localhost"
+        - "-ip.bind=0.0.0.0"
+        - "-filer"
+        - "-master.volumeSizeLimitMB=64"
+        - "-volume.max=8"
+        volumeMounts:
+        - name: data
+          mountPath: "/data"
+        readinessProbe:
+          httpGet:
+            port: 8888
+            path: "/"
+          periodSeconds: 10
+          timeoutSeconds: 8
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: seaweedfs
+spec:
+  podSelector:
+    matchLabels:
+      app: seaweedfs
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - files
+    ports:
+    - protocol: TCP
+      port: 8888
