@@ -1,0 +1,88 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - name: client
+    port: 5432
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels: &1
+      app: postgres
+  serviceName: postgres
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+  template:
+    metadata:
+      labels: *1
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: postgres:18.7-alpine3.23
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_PASSWORD_FILE
+          value: "/run/secrets/postgres-password"
+        volumeMounts:
+        - name: data
+          mountPath: "/var/lib/postgresql"
+        - name: init
+          mountPath: "/docker-entrypoint-initdb.d"
+          readOnly: true
+        - name: password
+          mountPath: "/run/secrets"
+          readOnly: true
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - "-h"
+            - localhost
+            - "-U"
+            - postgres
+            - "-d"
+            - postgres
+          periodSeconds: 10
+          timeoutSeconds: 8
+      volumes:
+      - name: init
+        configMap:
+          name: database-init
+      - name: password
+        secret:
+          secretName: postgres-password
+          items:
+          - key: password
+            path: postgres-password
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+  - Ingress
+  ingress: []

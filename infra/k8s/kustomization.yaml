@@ -1,0 +1,22 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rdp-mvp
+resources:
+- bff.yaml
+- content.yaml
+- files.yaml
+- iam.yaml
+- kafka.yaml
+- postgres.yaml
+- qdrant.yaml
+- reporting.yaml
+- screening.yaml
+- seaweedfs.yaml
+configMapGenerator:
+- name: kafka-config
+  envs:
+  - kafka.env
+- name: database-init
+  files:
+  - init.sql
