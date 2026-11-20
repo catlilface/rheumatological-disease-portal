@@ -1,21 +1,7 @@
 const storageKey = 'cookie-consent'
-export const optionalCookies = [
-  {
-    id: 'functional',
-    label: 'Функциональные',
-    description: 'Дополнительные настройки интерфейса.',
-  },
-  {
-    id: 'analytics',
-    label: 'Аналитические',
-    description: 'Статистика использования сайта.',
-  },
-] as const
+export const optionalCookies = ['functional', 'analytics'] as const
 
-export type CookieConsent = Record<
-  (typeof optionalCookies)[number]['id'],
-  boolean
->
+export type CookieConsent = Record<(typeof optionalCookies)[number], boolean>
 
 export const allAccepted: CookieConsent = { functional: true, analytics: true }
 export const allRejected: CookieConsent = {
@@ -23,16 +9,18 @@ export const allRejected: CookieConsent = {
   analytics: false,
 }
 
+function isCookieConsent(value: unknown): value is CookieConsent {
+  const consent = value as Partial<CookieConsent> | null
+  return optionalCookies.every((id) => typeof consent?.[id] === 'boolean')
+}
+
 export function readCookieConsent(): CookieConsent | null {
   try {
     const saved = localStorage.getItem(storageKey)
     if (!saved) return null
 
-    const consent = JSON.parse(saved)
-    if (
-      typeof consent?.functional === 'boolean' &&
-      typeof consent?.analytics === 'boolean'
-    ) {
+    const consent: unknown = JSON.parse(saved)
+    if (isCookieConsent(consent)) {
       return { functional: consent.functional, analytics: consent.analytics }
     }
   } catch {

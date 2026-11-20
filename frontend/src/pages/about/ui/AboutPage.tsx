@@ -1,89 +1,93 @@
 import './about.css'
-const operatorDetails = [
-  ['Полное наименование юридического лица / ФИО ИП', '[ПОЛНОЕ НАИМЕНОВАНИЕ]'],
-  ['Сокращённое наименование', '[СОКРАЩЁННОЕ НАИМЕНОВАНИЕ — ЕСЛИ ЕСТЬ]'],
-  ['ИНН', '[ИНН]'],
-  ['ОГРН / ОГРНИП', '[НОМЕР]'],
-  ['Место нахождения / юридический адрес', '[АДРЕС]'],
-  ['Почтовый адрес для официальных обращений', '[АДРЕС, ЕСЛИ ОТЛИЧАЕТСЯ]'],
-  ['Доменное имя сайта', '[ДОМЕН]'],
-  ['Email по общим вопросам', '[EMAIL]'],
-  ['Email для обращений по персональным данным', '[EMAIL ПД]'],
-  ['Контактный телефон (если используется)', '[ТЕЛЕФОН / НЕ УКАЗЫВАЕТСЯ]'],
-]
+import { policyHref } from '@entities/policy'
+import { t } from '@shared/i18n'
+
+const operatorFields = [
+  'fullName',
+  'shortName',
+  'taxId',
+  'registrationId',
+  'address',
+  'postalAddress',
+  'domain',
+  'email',
+  'privacyEmail',
+  'phone',
+] as const
+
+function OperatorDetails() {
+  return (
+    <section>
+      <h2>{t('about.details.title')}</h2>
+      <dl className="operator-details">
+        {operatorFields.map((field) => (
+          <div key={field}>
+            <dt>{t(`about.details.${field}`)}</dt>
+            <dd>{t(`about.details.${field}Placeholder`)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function LegalReferences() {
+  return (
+    <section>
+      <h2>{t('about.laws.title')}</h2>
+      <ul>
+        <li>
+          <a href="https://www.consultant.ru/document/cons_doc_LAW_61798/546dcc703c0a1e08647b40a2eeaf9461168c7cb1/">
+            {t('about.laws.information')}
+          </a>
+        </li>
+        <li>
+          <a href="https://www.consultant.ru/document/cons_doc_LAW_61801/">
+            {t('about.laws.personalData')}
+          </a>
+        </li>
+      </ul>
+    </section>
+  )
+}
 
 export default function AboutPage() {
   return (
     <article className="article">
-      <h1>Сведения об операторе и владельце сайта</h1>
-      <p className="article__lead">Публичная информация для пользователей</p>
+      <h1>{t('about.title')}</h1>
+      <p className="article__lead">{t('about.lead')}</p>
       <p className="article__meta">
-        Редакция от <time dateTime="2026-11-13">13 ноября 2026 г.</time>
-        {' · '}Вступает в силу: [ДАТА ПУБЛИКАЦИИ]
+        {t('about.revisionLabel')}{' '}
+        <time dateTime="2026-11-13">{t('about.revisionDate')}</time>
+        {' · '}
+        {t('about.effectiveDate')}
       </p>
 
+      <OperatorDetails />
+
       <section>
-        <h2>1. Реквизиты</h2>
-        <dl className="operator-details">
-          {operatorDetails.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <h2>{t('about.processing.title')}</h2>
+        <p>{t('about.processing.requests')}</p>
+        <p>{t('about.processing.contact')}</p>
       </section>
 
       <section>
-        <h2>2. Организация обработки персональных данных</h2>
-        <p>
-          Оператор определяет цели и состав обработки персональных данных
-          пользователей сайта. Обращения, предусмотренные ст. 14 и 20–21 Закона
-          № 152-ФЗ, направляются на [EMAIL ПД] или по почтовому адресу,
-          указанному выше.
-        </p>
-        <p>
-          Ответственный за организацию обработки ПД (сведения публикуются по
-          решению оператора; внутреннее назначение оформляется отдельно):
-          [ДОЛЖНОСТЬ И КОНТАКТ / НЕ ПУБЛИКУЮТСЯ ПЕРСОНАЛЬНЫЕ СВЕДЕНИЯ].
-        </p>
+        <h2>{t('about.notification.title')}</h2>
+        <p>{t('about.notification.body')}</p>
       </section>
 
       <section>
-        <h2>3. Сведения об уведомлении Роскомнадзора</h2>
+        <h2>{t('about.limitations.title')}</h2>
         <p>
-          Статус уведомления об обработке персональных данных: [ФАКТИЧЕСКИЙ
-          СТАТУС НА ДАТУ ПУБЛИКАЦИИ]. Номер записи в реестре операторов (если
-          присвоен): [НОМЕР / ОТСУТСТВУЕТ]. Не допускается публикация
-          неподтверждённого утверждения о подаче уведомления.
+          {t('about.limitations.body')}{' '}
+          <a href={policyHref('medical-advices')}>
+            {t('about.limitations.link')}
+          </a>
+          .
         </p>
       </section>
 
-      <section>
-        <h2>4. Информационные и медицинские ограничения</h2>
-        <p>
-          Сайт предоставляет инструменты предварительного скрининга и
-          самонаблюдения. Он не предназначен для самостоятельной постановки
-          диагнозов и назначения лечения. Медицинские ограничения раскрываются в
-          отдельном <a href="/policy/medical-advices">дисклеймере (PDF)</a>.
-        </p>
-      </section>
-
-      <section>
-        <h2>Нормативная основа</h2>
-        <ul>
-          <li>
-            <a href="https://www.consultant.ru/document/cons_doc_LAW_61798/546dcc703c0a1e08647b40a2eeaf9461168c7cb1/">
-              149-ФЗ, статья 10, часть 2
-            </a>
-          </li>
-          <li>
-            <a href="https://www.consultant.ru/document/cons_doc_LAW_61801/">
-              152-ФЗ, статьи 14, 18.1, 22
-            </a>
-          </li>
-        </ul>
-      </section>
+      <LegalReferences />
     </article>
   )
 }

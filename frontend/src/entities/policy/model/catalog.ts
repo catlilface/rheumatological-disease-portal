@@ -1,39 +1,21 @@
-export const policies = {
-  'personal-info': {
-    title: 'Политика обработки персональных данных',
-    description:
-      'Какие данные обрабатывает оператор и как пользователь может реализовать свои права.',
-  },
-  'personal-info-agreement': {
-    title: 'Согласие на обработку персональных данных',
-    description:
-      'Условия согласия на обработку персональных данных и сведений о здоровье.',
-  },
-  'user-agreement': {
-    title: 'Пользовательское соглашение',
-    description: 'Условия доступа к порталу и использования его функций.',
-  },
-  'medical-advices': {
-    title: 'Медицинский дисклеймер',
-    description:
-      'Назначение сервиса, ограничения предварительного скрининга и самонаблюдения.',
-  },
-  ai: {
-    title: 'Правила использования ИИ',
-    description:
-      'Как портал использует ИИ и какие ограничения действуют для его ответов.',
-  },
-  'account-deletion': {
-    title: 'Порядок удаления аккаунта',
-    description: 'Как запросить удаление аккаунта и персональных данных.',
-  },
-  cookies: {
-    title: 'Политика использования cookie',
-    description: 'Категории cookie, их назначение и управление настройками.',
-  },
-} as const
+const policySlugs = [
+  'personal-info',
+  'personal-info-agreement',
+  'user-agreement',
+  'medical-advices',
+  'ai',
+  'account-deletion',
+  'cookies',
+] as const
 
-export const policyLinks = Object.entries(policies).map(([slug, policy]) => ({
-  ...policy,
-  href: `/policy/${slug}`,
+type PolicySlug = (typeof policySlugs)[number]
+
+export function policyHref(slug: PolicySlug) {
+  return `/policy/${slug}`
+}
+
+export const policyLinks = policySlugs.map((slug) => ({
+  href: policyHref(slug),
+  title: `policy.${slug}.title` as const,
+  description: `policy.${slug}.description` as const,
 }))

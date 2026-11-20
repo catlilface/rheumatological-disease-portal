@@ -1,2 +1,6 @@
 export { CookieNotice } from './ui/CookieNotice'
-export { readCookieConsent, saveCookieConsent } from './model/consent'
+export {
+  readCookieConsent,
+  saveCookieConsent,
+  type CookieConsent,
+} from './model/consent'

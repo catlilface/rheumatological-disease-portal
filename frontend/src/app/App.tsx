@@ -1,32 +1,71 @@
-import { useEffect } from 'react'
-import { AboutPage } from '../pages/about'
-import { DocumentsPage } from '../pages/documents'
-import { HomePage } from '../pages/home'
-import { NotFoundPage } from '../pages/not-found'
-import { portalTitle } from '../shared/config/portal'
-import { SiteHeader } from '../widgets/site-header'
-import { SiteFooter } from '../widgets/site-footer'
+import { useEffect, type ReactNode } from 'react'
+import { Route, Routes } from 'react-router'
+import { AboutPage } from '@pages/about'
+import { DocumentsPage } from '@pages/documents'
+import { HomePage } from '@pages/home'
+import { NotFoundPage } from '@pages/not-found'
+import { t, type MessageKey } from '@shared/i18n'
+import { SiteFooter } from '@widgets/site-footer'
+import { SiteHeader } from '@widgets/site-header'
 
-const routes = new Map([
-  ['/', { Page: HomePage, title: portalTitle }],
-  ['/about', { Page: AboutPage, title: 'О нас' }],
-  ['/documents', { Page: DocumentsPage, title: 'Документы портала' }],
-])
+function PageContent({
+  title,
+  children,
+}: {
+  title?: MessageKey
+  children: ReactNode
+}) {
+  useEffect(() => {
+    const portal = t('portal.title')
+    document.title = title
+      ? t('portal.pageTitle', { page: t(title), portal })
+      : portal
+  }, [title])
+
+  return children
+}
 
 export default function App() {
-  const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  const { Page, title } = routes.get(path) ?? {
-    Page: NotFoundPage,
-    title: 'Страница не найдена',
-  }
-  useEffect(() => {
-    document.title = title === portalTitle ? title : `${title} — ${portalTitle}`
-  }, [title])
   return (
     <div className="page">
-      <SiteHeader path={path} />
+      <SiteHeader />
       <main className="container main">
-        <Page />
+        <Routes>
+          <Route
+            index
+            element={
+              <PageContent>
+                <HomePage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="about"
+            caseSensitive
+            element={
+              <PageContent title="nav.about">
+                <AboutPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="documents"
+            caseSensitive
+            element={
+              <PageContent title="documents.title">
+                <DocumentsPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <PageContent title="notFound.title">
+                <NotFoundPage />
+              </PageContent>
+            }
+          />
+        </Routes>
       </main>
       <SiteFooter />
     </div>

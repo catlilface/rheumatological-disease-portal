@@ -1,1 +1,1 @@
-export { policyLinks } from './model/catalog.js'
+export { policyHref, policyLinks } from './model/catalog'

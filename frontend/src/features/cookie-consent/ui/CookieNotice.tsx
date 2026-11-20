@@ -1,12 +1,8 @@
 import './cookie-notice.css'
-import { useEffect, useRef, useState } from 'react'
-
-import {
-  allAccepted,
-  allRejected,
-  optionalCookies,
-  type CookieConsent,
-} from '../model/consent'
+import { policyHref } from '@entities/policy'
+import { t } from '@shared/i18n'
+import { allAccepted, allRejected, type CookieConsent } from '../model/consent'
+import { CookieSettings } from './CookieSettings'
 
 type CookieNoticeProps = {
   consent: CookieConsent | null
@@ -21,63 +17,36 @@ export function CookieNotice({
   onOpenSettings,
   onSave,
 }: CookieNoticeProps) {
-  const [selection, setSelection] = useState(consent ?? allRejected)
-  const settings = useRef<HTMLFieldSetElement>(null)
-
-  useEffect(() => {
-    if (settingsOpen) settings.current?.focus()
-  }, [settingsOpen])
-
   return (
     <section className="cookie-notice" aria-labelledby="cookie-title">
       <div className="container cookie-notice__inner">
         <div>
-          <h2 id="cookie-title">Использование cookie</h2>
+          <h2 id="cookie-title">{t('cookies.title')}</h2>
           <p>
-            Вы можете разрешить необязательные cookie или отключить их.{' '}
-            <a href="/policy/cookies">Политика использования cookie (PDF)</a>
+            {t('cookies.intro')}{' '}
+            <a href={policyHref('cookies')}>
+              {t('policy.pdfLink', { title: t('policy.cookies.title') })}
+            </a>
           </p>
         </div>
         <div className="cookie-notice__actions">
           <button type="button" onClick={() => onSave(allAccepted)}>
-            Принять необязательные
+            {t('cookies.accept')}
           </button>
           <button type="button" onClick={() => onSave(allRejected)}>
-            Отклонить необязательные
+            {t('cookies.reject')}
           </button>
-          {settingsOpen ? null : (
+          {!settingsOpen && (
             <button type="button" onClick={onOpenSettings}>
-              Настроить
+              {t('cookies.configure')}
             </button>
           )}
         </div>
         {settingsOpen && (
-          <fieldset
-            className="cookie-notice__settings"
-            ref={settings}
-            tabIndex={-1}
-          >
-            <legend>Необязательные cookie</legend>
-            {optionalCookies.map(({ id, label, description }) => (
-              <label key={id}>
-                <input
-                  type="checkbox"
-                  checked={selection[id]}
-                  onChange={(event) =>
-                    setSelection({ ...selection, [id]: event.target.checked })
-                  }
-                />
-                <span>
-                  <strong>{label}</strong>
-                  <br />
-                  {description}
-                </span>
-              </label>
-            ))}
-            <button type="button" onClick={() => onSave(selection)}>
-              Сохранить настройки
-            </button>
-          </fieldset>
+          <CookieSettings
+            initialConsent={consent ?? allRejected}
+            onSave={onSave}
+          />
         )}
       </div>
     </section>

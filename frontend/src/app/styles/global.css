@@ -1,15 +1,14 @@
-:root,
-[data-theme='light'] {
-  color-scheme: light;
-  --color-bg: #f2f7fc;
-  --color-surface: #fff;
-  --color-text: #142d49;
-  --color-muted: #465a70;
-  --color-accent: #155c9e;
-  --color-accent-hover: #0d467e;
-  --color-accent-soft: #e5f1fd;
-  --color-border: #ccdeee;
-  --color-highlight: #fff;
+:root {
+  color-scheme: light dark;
+  --color-bg: light-dark(#f2f7fc, #111b26);
+  --color-surface: light-dark(#fff, #192838);
+  --color-text: light-dark(#142d49, #edf4fb);
+  --color-muted: light-dark(#465a70, #bdcedd);
+  --color-accent: light-dark(#155c9e, #91c8ff);
+  --color-accent-hover: light-dark(#0d467e, #c2e1ff);
+  --color-accent-soft: light-dark(#e5f1fd, #213a50);
+  --color-border: light-dark(#ccdeee, #43586d);
+  --color-highlight: light-dark(#fff, #102438);
   --shadow: 0 10px 30px rgb(25 62 99 / 7%);
 }
 
@@ -133,15 +132,28 @@ button {
   text-decoration: underline;
 }
 
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --color-bg: #111b26;
-  --color-surface: #192838;
-  --color-text: #edf4fb;
-  --color-muted: #bdcedd;
-  --color-accent: #91c8ff;
-  --color-accent-hover: #c2e1ff;
-  --color-accent-soft: #213a50;
-  --color-border: #43586d;
-  --color-highlight: #102438;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root,
+  .header,
+  .footer,
+  .article,
+  .hero,
+  .cookie-notice,
+  .cookie-notice button,
+  .primary-link,
+  a,
+  .text-button {
+    transition:
+      color 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease;
+  }
 }

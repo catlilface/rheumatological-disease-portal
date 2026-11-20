@@ -58,6 +58,8 @@ server {
 
   # SPA fallback: client-side routes are served by index.html
   location / {
+    absolute_redirect off;
+    rewrite ^(/(?:about|documents))/+$ $1 permanent;
     add_header Cache-Control "no-cache";
     try_files $uri $uri/ /index.html;
   }

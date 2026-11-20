@@ -1,26 +1,21 @@
 import './header.css'
-import { portalTitle } from '../../../shared/config/portal'
+import { Link, NavLink } from 'react-router'
+import { t } from '@shared/i18n'
 
-export default function SiteHeader({ path }: { path: string }) {
+export default function SiteHeader() {
   return (
     <header className="header">
       <div className="container header__inner">
-        <a className="brand" href="/">
-          {portalTitle}
-        </a>
-        <nav className="header__nav" aria-label="Основная навигация">
-          <a
-            href="/documents"
-            aria-current={path === '/documents' ? 'page' : undefined}
-          >
-            Документы
-          </a>
-          <a
-            href="/about"
-            aria-current={path === '/about' ? 'page' : undefined}
-          >
-            О нас
-          </a>
+        <Link className="brand" to="/">
+          {t('portal.title')}
+        </Link>
+        <nav className="header__nav" aria-label={t('nav.primary')}>
+          <NavLink to="/documents" end caseSensitive>
+            {t('nav.documents')}
+          </NavLink>
+          <NavLink to="/about" end caseSensitive>
+            {t('nav.about')}
+          </NavLink>
         </nav>
       </div>
     </header>

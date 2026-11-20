@@ -1,24 +1,37 @@
-export type Theme = 'light' | 'dark'
+export const themes = ['auto', 'light', 'dark'] as const
+
+export type Theme = (typeof themes)[number]
 
 const storageKey = 'portal-theme'
+const defaultTheme = 'auto'
 
-export function readTheme(remember: boolean): Theme {
-  try {
-    if (remember && localStorage.getItem(storageKey) === 'dark') {
-      return 'dark'
-    }
-  } catch {
-    // Browser storage can be disabled.
-  }
-  return 'light'
+function isTheme(value: string | null): value is Theme {
+  return themes.some((theme) => theme === value)
 }
 
-export function applyTheme(theme: Theme, remember: boolean) {
-  document.documentElement.dataset.theme = theme
+export function readTheme(remember: boolean): {
+  theme: Theme
+  canChange: boolean
+} {
+  try {
+    const saved = localStorage.getItem(storageKey)
+    return {
+      theme: remember && isTheme(saved) ? saved : defaultTheme,
+      canChange: true,
+    }
+  } catch (error) {
+    console.warn('Could not read the portal theme preference', error)
+    return { theme: defaultTheme, canChange: false }
+  }
+}
+
+export function syncThemePreference(theme: Theme, remember: boolean): boolean {
   try {
     if (remember) localStorage.setItem(storageKey, theme)
     else localStorage.removeItem(storageKey)
-  } catch {
-    // The selected theme still applies to the current page.
+    return true
+  } catch (error) {
+    console.warn('Could not update the portal theme preference', error)
+    return false
   }
 }

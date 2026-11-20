@@ -1,40 +1,55 @@
 import './footer.css'
 import { useRef, useState } from 'react'
+import { Link } from 'react-router'
+import { policyHref } from '@entities/policy'
 import {
   CookieNotice,
   readCookieConsent,
   saveCookieConsent,
-} from '../../../features/cookie-consent'
-import { ThemeSwitch } from '../../../features/theme-switch'
+  type CookieConsent,
+} from '@features/cookie-consent'
+import { ThemeSwitch } from '@features/theme-switch'
+import { t } from '@shared/i18n'
+
+function MedicalDisclaimer() {
+  return (
+    <div>
+      <h2>{t('policy.medical-advices.title')}</h2>
+      <p>{t('disclaimer.summary')}</p>
+      <a href={policyHref('medical-advices')}>{t('disclaimer.fullText')}</a>
+    </div>
+  )
+}
 
 export default function SiteFooter() {
   const [consent, setConsent] = useState(readCookieConsent)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const cookieSettingsButton = useRef<HTMLButtonElement>(null)
+
+  const openSettings = () => setSettingsOpen(true)
+  const saveConsent = (choice: CookieConsent) => {
+    saveCookieConsent(choice)
+    setConsent(choice)
+    setSettingsOpen(false)
+    cookieSettingsButton.current?.focus()
+  }
+
   return (
     <>
       <footer className="footer">
         <div className="container footer__inner">
-          <div>
-            <h2>Медицинский дисклеймер</h2>
-            <p>
-              Информация на сайте носит справочный характер, не является
-              диагнозом или клинической рекомендацией и не заменяет консультацию
-              врача.
-            </p>
-            <a href="/policy/medical-advices">Полный текст дисклеймера (PDF)</a>
-          </div>
-          <nav className="footer__nav" aria-label="Информация о портале">
-            <a href="/documents">Документы портала</a>
-            <a href="/about">Сведения об операторе</a>
+          <MedicalDisclaimer />
+          <nav className="footer__nav" aria-label={t('nav.footer')}>
+            <Link to="/documents">{t('documents.title')}</Link>
+            <Link to="/about">{t('about.operatorLink')}</Link>
             <ThemeSwitch remember={consent?.functional === true} />
             <button
               type="button"
               className="text-button"
               ref={cookieSettingsButton}
-              onClick={() => setSettingsOpen(true)}
+              onClick={openSettings}
             >
-              Настройки cookie
+              {t('cookies.settings')}
             </button>
           </nav>
         </div>
@@ -44,13 +59,8 @@ export default function SiteFooter() {
         <CookieNotice
           consent={consent}
           settingsOpen={settingsOpen}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onSave={(choice) => {
-            saveCookieConsent(choice)
-            setConsent(choice)
-            setSettingsOpen(false)
-            cookieSettingsButton.current?.focus()
-          }}
+          onOpenSettings={openSettings}
+          onSave={saveConsent}
         />
       )}
     </>

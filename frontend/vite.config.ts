@@ -1,32 +1,25 @@
 import react from '@vitejs/plugin-react'
-import type { Plugin, ViteDevServer } from 'vite'
 import { defineConfig } from 'vitest/config'
-import { policyLinks } from './src/entities/policy/index.js'
-
-function policyDocuments(): Plugin {
-  const pdfs = new Map(policyLinks.map(({ href }) => [href, `${href}.pdf`]))
-
-  function servePolicyDocuments(server: Pick<ViteDevServer, 'middlewares'>) {
-    server.middlewares.use((request, _response, next) => {
-      if (request.url) {
-        const [path, query] = request.url.split(/\?(.*)/s)
-        const pdf = pdfs.get(path.replace(/\/+$/, ''))
-        if (pdf) request.url = query ? `${pdf}?${query}` : pdf
-      }
-
-      next()
-    })
-  }
-
-  return {
-    name: 'policy-documents',
-    configureServer: servePolicyDocuments,
-    configurePreviewServer: servePolicyDocuments,
-  }
-}
+import { t } from './src/shared/i18n/index.ts'
 
 export default defineConfig({
-  plugins: [react(), policyDocuments()],
+  plugins: [
+    react(),
+    {
+      name: 'portal-metadata',
+      transformIndexHtml() {
+        return [
+          { tag: 'title', children: t('portal.title'), injectTo: 'head' },
+          {
+            tag: 'meta',
+            attrs: { name: 'description', content: t('portal.description') },
+            injectTo: 'head',
+          },
+        ]
+      },
+    },
+  ],
+  resolve: { tsconfigPaths: true },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/app/testing/setup.ts'],

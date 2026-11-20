@@ -1,18 +1,16 @@
 import './home.css'
-import { portalTitle } from '../../../shared/config/portal'
+import { Link } from 'react-router'
+import { t } from '@shared/i18n'
 
 export default function HomePage() {
   return (
     <section className="hero">
-      <p className="hero__status">Сайт находится в разработке</p>
-      <h1>{portalTitle}</h1>
-      <p className="hero__intro">
-        Скоро здесь появится система, которая поможет вовремя заметить признаки
-        ревматологических заболеваний и подскажет, к какому врачу обратиться.
-      </p>
-      <a className="primary-link" href="/documents">
-        Документы портала
-      </a>
+      <p className="hero__status">{t('home.status')}</p>
+      <h1>{t('portal.title')}</h1>
+      <p className="hero__intro">{t('home.intro')}</p>
+      <Link className="primary-link" to="/documents">
+        {t('documents.title')}
+      </Link>
     </section>
   )
 }
