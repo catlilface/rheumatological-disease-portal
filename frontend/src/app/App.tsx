@@ -1,12 +1,9 @@
 import { useEffect, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
-import { AboutPage } from '@pages/about'
-import { DocumentsPage } from '@pages/documents'
-import { HomePage } from '@pages/home'
-import { NotFoundPage } from '@pages/not-found'
+
+import { AboutPage, DocumentsPage, HomePage, NotFoundPage } from '@pages'
+import { SiteFooter, SiteHeader } from '@widgets'
 import { t, type MessageKey } from '@shared/i18n'
-import { SiteFooter } from '@widgets/site-footer'
-import { SiteHeader } from '@widgets/site-header'
 
 function PageContent({
   title,

@@ -15,12 +15,13 @@ export function readTheme(remember: boolean): {
 } {
   try {
     const saved = localStorage.getItem(storageKey)
+    if (!remember) localStorage.removeItem(storageKey)
     return {
       theme: remember && isTheme(saved) ? saved : defaultTheme,
       canChange: true,
     }
   } catch (error) {
-    console.warn('Could not read the portal theme preference', error)
+    console.warn('Could not initialize the portal theme preference', error)
     return { theme: defaultTheme, canChange: false }
   }
 }

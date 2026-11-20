@@ -1,5 +1,5 @@
 import './about.css'
-import { policyHref } from '@entities/policy'
+import { policyHref } from '@entities'
 import { t } from '@shared/i18n'
 
 const operatorFields = [

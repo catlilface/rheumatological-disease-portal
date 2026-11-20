@@ -49,14 +49,21 @@ describe('nginx', () => {
     await response.body.cancel()
   })
 
-  for (const route of ['/about', '/documents']) {
-    it(`redirects ${route}/ and keeps its query string`, async () => {
-      const response = await get(`${route}/?source=test`)
+  for (const [request, route] of [
+    ['/about/', '/about'],
+    ['/documents/', '/documents'],
+    ['/future/nested/page///', '/future/nested/page'],
+    ['/x/', '/x'],
+    ['/search/%D1%82%D0%B5%D1%81%D1%82/', '/search/%D1%82%D0%B5%D1%81%D1%82'],
+  ]) {
+    it(`redirects ${request} and keeps its query string`, async () => {
+      const query = '?source=test%2Fvalue&tag=a+b'
+      const response = await get(`${request}${query}`)
       assert.equal(response.status, 301)
-      assert.equal(response.headers.get('location'), `${route}?source=test`)
+      assert.equal(response.headers.get('location'), `${route}${query}`)
       await response.body.cancel()
 
-      const destination = await get(`${route}?source=test`)
+      const destination = await get(`${route}${query}`)
       assert.equal(destination.status, 200)
       assert.match(
         destination.headers.get('content-type') ?? '',
@@ -65,6 +72,12 @@ describe('nginx', () => {
       await destination.body.cancel()
     })
   }
+
+  it('leaves asset requests under the asset location', async () => {
+    const response = await get('/assets/missing/')
+    assert.equal(response.status, 404)
+    await response.body.cancel()
+  })
 
   it('serves the SPA directly at the root', async () => {
     const response = await get('/')

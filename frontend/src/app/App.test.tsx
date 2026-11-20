@@ -168,9 +168,11 @@ describe('Theme', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     renderApp()
 
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('Storage unavailable')
-    })
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('Storage unavailable')
+      })
     fireEvent.change(themeControl(), { target: { value: 'dark' } })
 
     expect(warn).toHaveBeenCalled()
@@ -178,5 +180,11 @@ describe('Theme', () => {
     expect(themeControl()).toHaveValue('light')
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(localStorage.getItem('portal-theme')).toBe('light')
+
+    setItem.mockRestore()
+    fireEvent.click(screen.getByRole('button', { name: t('cookies.settings') }))
+    fireEvent.click(screen.getByRole('button', { name: t('cookies.reject') }))
+    expect(localStorage.getItem('portal-theme')).toBeNull()
+    expect(themeControl()).toBeDisabled()
   })
 })

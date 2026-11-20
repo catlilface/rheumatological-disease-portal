@@ -1,5 +1,5 @@
 import './cookie-notice.css'
-import { policyHref } from '@entities/policy'
+import { policyHref } from '@entities'
 import { t } from '@shared/i18n'
 import { allAccepted, allRejected, type CookieConsent } from '../model/consent'
 import { CookieSettings } from './CookieSettings'

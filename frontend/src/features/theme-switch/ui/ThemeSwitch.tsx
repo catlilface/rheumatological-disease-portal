@@ -1,29 +1,19 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { useId } from 'react'
 import { t } from '@shared/i18n'
-import {
-  readTheme,
-  syncThemePreference,
-  themes,
-  type Theme,
-} from '../model/theme'
+import { themes, type Theme } from '../model/theme'
 
-export default function ThemeSwitch({ remember }: { remember: boolean }) {
-  const [{ theme, canChange }, setSelection] = useState(() =>
-    readTheme(remember),
-  )
-  const appliedTheme = useRef<Theme>('auto')
+type ThemeSwitchProps = {
+  theme: Theme
+  canChange: boolean
+  onChange: (theme: Theme) => void
+}
+
+export default function ThemeSwitch({
+  theme,
+  canChange,
+  onChange,
+}: ThemeSwitchProps) {
   const unavailableId = useId()
-
-  useLayoutEffect(() => {
-    if (canChange && !syncThemePreference(theme, remember)) {
-      setSelection({ theme: appliedTheme.current, canChange: false })
-      return
-    }
-
-    document.documentElement.dataset.theme = theme
-    appliedTheme.current = theme
-  }, [theme, remember, canChange])
-
   return (
     <div>
       <label className="theme-select">
@@ -36,7 +26,7 @@ export default function ThemeSwitch({ remember }: { remember: boolean }) {
             const nextTheme = themes.find(
               (option) => option === event.target.value,
             )
-            if (nextTheme) setSelection({ theme: nextTheme, canChange: true })
+            if (nextTheme) onChange(nextTheme)
           }}
         >
           {themes.map((option) => (

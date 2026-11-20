@@ -59,7 +59,10 @@ server {
   # SPA fallback: client-side routes are served by index.html
   location / {
     absolute_redirect off;
-    rewrite ^(/(?:about|documents))/+$ $1 permanent;
+    # Match the original URI so percent-encoding and the query stay intact.
+    if ($request_uri ~ "^(/[^/?\x5c](?:[^?\x5c]*[^/?\x5c])?)/+(\?.*)?$") {
+      return 301 $1$2;
+    }
     add_header Cache-Control "no-cache";
     try_files $uri $uri/ /index.html;
   }

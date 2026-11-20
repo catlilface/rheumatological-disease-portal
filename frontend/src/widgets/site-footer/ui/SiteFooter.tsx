@@ -1,14 +1,15 @@
 import './footer.css'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { policyHref } from '@entities/policy'
+import { policyHref } from '@entities'
 import {
   CookieNotice,
   readCookieConsent,
   saveCookieConsent,
+  ThemeSwitch,
+  useTheme,
   type CookieConsent,
-} from '@features/cookie-consent'
-import { ThemeSwitch } from '@features/theme-switch'
+} from '@features'
 import { t } from '@shared/i18n'
 
 function MedicalDisclaimer() {
@@ -23,12 +24,15 @@ function MedicalDisclaimer() {
 
 export default function SiteFooter() {
   const [consent, setConsent] = useState(readCookieConsent)
+  const rememberTheme = consent?.functional === true
+  const { theme, canChange, changeTheme, syncConsent } = useTheme(rememberTheme)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const cookieSettingsButton = useRef<HTMLButtonElement>(null)
 
   const openSettings = () => setSettingsOpen(true)
   const saveConsent = (choice: CookieConsent) => {
     saveCookieConsent(choice)
+    if (choice.functional !== rememberTheme) syncConsent(choice.functional)
     setConsent(choice)
     setSettingsOpen(false)
     cookieSettingsButton.current?.focus()
@@ -42,7 +46,11 @@ export default function SiteFooter() {
           <nav className="footer__nav" aria-label={t('nav.footer')}>
             <Link to="/documents">{t('documents.title')}</Link>
             <Link to="/about">{t('about.operatorLink')}</Link>
-            <ThemeSwitch remember={consent?.functional === true} />
+            <ThemeSwitch
+              theme={theme}
+              canChange={canChange}
+              onChange={changeTheme}
+            />
             <button
               type="button"
               className="text-button"

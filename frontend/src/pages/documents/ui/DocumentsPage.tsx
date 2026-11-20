@@ -1,6 +1,6 @@
 import './documents.css'
 import { Link } from 'react-router'
-import { policyLinks } from '@entities/policy'
+import { policyLinks } from '@entities'
 import { t } from '@shared/i18n'
 
 function PolicyItem({
