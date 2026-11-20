@@ -9,6 +9,15 @@
     "skipLibCheck": true,
 
     "moduleResolution": "bundler",
+    "paths": {
+      "@app": ["./src/app/index.ts"],
+      "@app/*": ["./src/app/*"],
+      "@pages": ["./src/pages/index.ts"],
+      "@widgets": ["./src/widgets/index.ts"],
+      "@features": ["./src/features/index.ts"],
+      "@entities": ["./src/entities/index.ts"],
+      "@shared/*": ["./src/shared/*"]
+    },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",

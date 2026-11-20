@@ -1,0 +1,111 @@
+export const ru = {
+  'portal.title': 'Ревматологический портал',
+  'portal.description':
+    'Портал для пациентов с ревматологическими заболеваниями',
+  'portal.pageTitle': '{page} — {portal}',
+  'nav.primary': 'Основная навигация',
+  'nav.footer': 'Информация о портале',
+  'nav.documents': 'Документы',
+  'nav.about': 'О нас',
+  'home.status': 'Сайт находится в разработке',
+  'home.intro':
+    'Скоро здесь появится система, которая поможет вовремя заметить признаки ревматологических заболеваний и подскажет, к какому врачу обратиться.',
+  'documents.title': 'Документы портала',
+  'documents.pdf': 'PDF',
+  'documents.operatorDescription':
+    'Реквизиты владельца сайта и сведения об организации обработки персональных данных.',
+  'notFound.title': 'Страница не найдена',
+  'notFound.homeLink': 'На главную',
+
+  'about.title': 'Сведения об операторе и владельце сайта',
+  'about.operatorLink': 'Сведения об операторе',
+  'about.lead': 'Публичная информация для пользователей',
+  'about.revisionLabel': 'Редакция от',
+  'about.revisionDate': '13 ноября 2026 г.',
+  'about.effectiveDate': 'Вступает в силу: [ДАТА ПУБЛИКАЦИИ]',
+  'about.details.title': '1. Реквизиты',
+  'about.details.fullName': 'Полное наименование юридического лица / ФИО ИП',
+  'about.details.fullNamePlaceholder': '[ПОЛНОЕ НАИМЕНОВАНИЕ]',
+  'about.details.shortName': 'Сокращённое наименование',
+  'about.details.shortNamePlaceholder':
+    '[СОКРАЩЁННОЕ НАИМЕНОВАНИЕ — ЕСЛИ ЕСТЬ]',
+  'about.details.taxId': 'ИНН',
+  'about.details.taxIdPlaceholder': '[ИНН]',
+  'about.details.registrationId': 'ОГРН / ОГРНИП',
+  'about.details.registrationIdPlaceholder': '[НОМЕР]',
+  'about.details.address': 'Место нахождения / юридический адрес',
+  'about.details.addressPlaceholder': '[АДРЕС]',
+  'about.details.postalAddress': 'Почтовый адрес для официальных обращений',
+  'about.details.postalAddressPlaceholder': '[АДРЕС, ЕСЛИ ОТЛИЧАЕТСЯ]',
+  'about.details.domain': 'Доменное имя сайта',
+  'about.details.domainPlaceholder': '[ДОМЕН]',
+  'about.details.email': 'Email по общим вопросам',
+  'about.details.emailPlaceholder': '[EMAIL]',
+  'about.details.privacyEmail': 'Email для обращений по персональным данным',
+  'about.details.privacyEmailPlaceholder': '[EMAIL ПД]',
+  'about.details.phone': 'Контактный телефон (если используется)',
+  'about.details.phonePlaceholder': '[ТЕЛЕФОН / НЕ УКАЗЫВАЕТСЯ]',
+  'about.processing.title': '2. Организация обработки персональных данных',
+  'about.processing.requests':
+    'Оператор определяет цели и состав обработки персональных данных пользователей сайта. Обращения, предусмотренные ст. 14 и 20–21 Закона № 152-ФЗ, направляются на [EMAIL ПД] или по почтовому адресу, указанному выше.',
+  'about.processing.contact':
+    'Ответственный за организацию обработки ПД (сведения публикуются по решению оператора; внутреннее назначение оформляется отдельно): [ДОЛЖНОСТЬ И КОНТАКТ / НЕ ПУБЛИКУЮТСЯ ПЕРСОНАЛЬНЫЕ СВЕДЕНИЯ].',
+  'about.notification.title': '3. Сведения об уведомлении Роскомнадзора',
+  'about.notification.body':
+    'Статус уведомления об обработке персональных данных: [ФАКТИЧЕСКИЙ СТАТУС НА ДАТУ ПУБЛИКАЦИИ]. Номер записи в реестре операторов (если присвоен): [НОМЕР / ОТСУТСТВУЕТ]. Не допускается публикация неподтверждённого утверждения о подаче уведомления.',
+  'about.limitations.title': '4. Информационные и медицинские ограничения',
+  'about.limitations.body':
+    'Сайт предоставляет инструменты предварительного скрининга и самонаблюдения. Он не предназначен для самостоятельной постановки диагнозов и назначения лечения. Медицинские ограничения раскрываются в отдельном',
+  'about.limitations.link': 'дисклеймере (PDF)',
+  'about.laws.title': 'Нормативная основа',
+  'about.laws.information': '149-ФЗ, статья 10, часть 2',
+  'about.laws.personalData': '152-ФЗ, статьи 14, 18.1, 22',
+
+  'policy.personal-info.title': 'Политика обработки персональных данных',
+  'policy.personal-info.description':
+    'Какие данные обрабатывает оператор и как пользователь может реализовать свои права.',
+  'policy.personal-info-agreement.title':
+    'Согласие на обработку персональных данных',
+  'policy.personal-info-agreement.description':
+    'Условия согласия на обработку персональных данных и сведений о здоровье.',
+  'policy.user-agreement.title': 'Пользовательское соглашение',
+  'policy.user-agreement.description':
+    'Условия доступа к порталу и использования его функций.',
+  'policy.medical-advices.title': 'Медицинский дисклеймер',
+  'policy.medical-advices.description':
+    'Назначение сервиса, ограничения предварительного скрининга и самонаблюдения.',
+  'policy.ai.title': 'Правила использования ИИ',
+  'policy.ai.description':
+    'Как портал использует ИИ и какие ограничения действуют для его ответов.',
+  'policy.account-deletion.title': 'Порядок удаления аккаунта',
+  'policy.account-deletion.description':
+    'Как запросить удаление аккаунта и персональных данных.',
+  'policy.cookies.title': 'Политика использования cookie',
+  'policy.cookies.description':
+    'Категории cookie, их назначение и управление настройками.',
+  'policy.pdfLink': '{title} (PDF)',
+  'disclaimer.summary':
+    'Информация на сайте носит справочный характер, не является диагнозом или клинической рекомендацией и не заменяет консультацию врача.',
+  'disclaimer.fullText': 'Полный текст дисклеймера (PDF)',
+
+  'cookies.title': 'Использование cookie',
+  'cookies.intro':
+    'Вы можете разрешить необязательные cookie или отключить их.',
+  'cookies.accept': 'Принять необязательные',
+  'cookies.reject': 'Отклонить необязательные',
+  'cookies.configure': 'Настроить',
+  'cookies.settings': 'Настройки cookie',
+  'cookies.optional': 'Необязательные cookie',
+  'cookies.save': 'Сохранить настройки',
+  'cookies.functional.label': 'Функциональные',
+  'cookies.functional.description': 'Дополнительные настройки интерфейса.',
+  'cookies.analytics.label': 'Аналитические',
+  'cookies.analytics.description': 'Статистика использования сайта.',
+
+  'theme.label': 'Тема оформления',
+  'theme.auto': 'Системная',
+  'theme.light': 'Светлая',
+  'theme.dark': 'Тёмная',
+  'theme.unavailable':
+    'Выбор темы недоступен, поскольку браузер не разрешает сохранять настройки.',
+} as const
