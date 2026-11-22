@@ -28,6 +28,18 @@ x-worker: &worker
     kafka:
       condition: service_healthy
 
+# One-off DB tooling per service: migrations (as the postgres superuser) and
+# the isolation/integrity test suites (as the least-privilege app_<service>
+# role). Separate from packages/service-runtime, which stays on Python 3.15
+# and never touches Postgres - see packages/migration-runtime/Dockerfile.
+x-db: &db
+  profiles: ["migrate"]
+  networks: [databases]
+  secrets: [postgres-password, service-db-password]
+  depends_on:
+    postgres:
+      condition: service_healthy
+
 services:
   bff:
     image: rdp-bff:mvp
@@ -50,27 +62,111 @@ services:
     <<: *grpc
     image: rdp-iam:mvp
     build: {<<: *build, args: {SERVICE: iam}}
+    # `databases` lets `docker compose run iam alembic upgrade head` (or
+    # pytest) reach postgres:5432; main.py itself does not touch SQL yet.
+    networks: [rpc, databases]
 
   files:
     <<: *grpc
     image: rdp-files:mvp
     build: {<<: *build, args: {SERVICE: files}}
-    networks: [rpc, objects]
+    networks: [rpc, objects, databases]
 
   screening:
     <<: *worker
     image: rdp-screening:mvp
     build: {<<: *build, args: {SERVICE: screening}}
+    networks: [rpc, broker, databases]
 
   content:
     <<: *worker
     image: rdp-content:mvp
     build: {<<: *build, args: {SERVICE: content}}
+    networks: [rpc, broker, databases]
 
   reporting:
     <<: *worker
     image: rdp-reporting:mvp
     build: {<<: *build, args: {SERVICE: reporting}}
+    networks: [rpc, broker, databases]
+
+  iam-db:
+    <<: *db
+    image: rdp-iam-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: iam}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: iam
+
+  screening-db:
+    <<: *db
+    image: rdp-screening-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: screening}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: screening
+
+  content-db:
+    <<: *db
+    image: rdp-content-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: content}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: content
+
+  reporting-db:
+    <<: *db
+    image: rdp-reporting-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: reporting}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: reporting
+
+  files-db:
+    <<: *db
+    image: rdp-files-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: files}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: files
+
+  ai-db:
+    <<: *db
+    image: rdp-ai-db:mvp
+    build:
+      context: .
+      dockerfile: packages/migration-runtime/Dockerfile
+      args: {SERVICE: ai}
+    environment:
+      DATABASE__HOST: postgres
+      DATABASE__PORT: "5432"
+      DATABASE__USER: postgres
+      DATABASE__NAME: ai
 
   kafka:
     image: apache/kafka:4.4.0
@@ -91,6 +187,7 @@ services:
       - databases
     secrets:
       - postgres-password
+      - service-db-password
     environment:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
     volumes:
@@ -126,6 +223,8 @@ services:
 secrets:
   postgres-password:
     file: ./.secrets/postgres-password
+  service-db-password:
+    file: ./.secrets/service-db-password
 networks:
   edge:
   rpc:

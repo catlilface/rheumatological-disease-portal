@@ -20,6 +20,7 @@ Qdrant выбран как отдельный векторный индекс, �
 umask 077
 mkdir -p .secrets
 test -s .secrets/postgres-password || openssl rand -hex 32 > .secrets/postgres-password
+test -s .secrets/service-db-password || openssl rand -hex 32 > .secrets/service-db-password
 export COMPOSE_PROJECT_NAME=rdp-mvp
 docker compose build  # отдельный образ каждого приложения
 cp .env.example .env  # заполнить своими значениями
@@ -29,6 +30,8 @@ curl -fsS http://127.0.0.1:8000/health
 ```
 
 Только `127.0.0.1:8000` опубликован на хосте. Остальные соединения идут по внутренним сетям Compose. `infra/k8s/kafka.env` и `infra/k8s/init.sql` общие для двух окружений. Файл `.env` необязателен и относится к BFF. Секреты не отправляются в контекст сборки. Обычная остановка — `docker compose down`; `down -v` **удаляет данные**. SQL-инициализация выполняется на новом томе, не при каждом старте; смена файла пароля не меняет пароль уже созданной БД.
+
+`.secrets/service-db-password` — общий пароль ролей `app_<сервис>` (по одной наименее privileged роли на БД; см. `infra/k8s/init.sql`). Миграции владельцев применяются суперпользователем `postgres`, а не этими ролями: `make up` из корня репозитория поднимает Postgres и прогоняет миграции всех шести сервисов (`docker compose run --rm <сервис> alembic upgrade head`), используя `.secrets/postgres-password` только для самого вызова миграции — он не сохраняется в образе и не передаётся сервисам при обычном `up`.
 
 ## Тестовый Kubernetes с нуля
 
@@ -51,6 +54,7 @@ for service in bff content files iam reporting screening; do
 done
 kubectl create namespace rdp-mvp
 kubectl -n rdp-mvp create secret generic postgres-password --from-file=password=.secrets/postgres-password
+kubectl -n rdp-mvp create secret generic service-db-password --from-file=password=.secrets/service-db-password
 kubectl apply -k infra/k8s
 for w in $(kubectl -n rdp-mvp get deploy,sts -o name); do
   kubectl -n rdp-mvp rollout status "$w" --timeout=5m || exit 1

@@ -50,7 +50,12 @@ spec:
           mountPath: "/docker-entrypoint-initdb.d"
           readOnly: true
         - name: password
-          mountPath: "/run/secrets"
+          mountPath: "/run/secrets/postgres-password"
+          subPath: postgres-password
+          readOnly: true
+        - name: service-password
+          mountPath: "/run/secrets/service-db-password"
+          subPath: service-db-password
           readOnly: true
         readinessProbe:
           exec:
@@ -74,6 +79,12 @@ spec:
           items:
           - key: password
             path: postgres-password
+      - name: service-password
+        secret:
+          secretName: service-db-password
+          items:
+          - key: password
+            path: service-db-password
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -85,4 +96,22 @@ spec:
       app: postgres
   policyTypes:
   - Ingress
-  ingress: []
+  # Each pod below reaches only its own database and cannot create tables
+  # there - enforced by Postgres roles/grants (infra/k8s/init.sql), not by
+  # this policy. This policy only decides who can attempt a connection at all.
+  ingress:
+  - from:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values:
+          - iam
+          - screening
+          - content
+          - reporting
+          - files
+          - ai
+    ports:
+    - protocol: TCP
+      port: 5432
