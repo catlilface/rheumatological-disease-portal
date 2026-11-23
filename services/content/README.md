@@ -13,5 +13,13 @@
 версии на материал — частичный уникальный индекс
 `material_versions_one_published_idx ... WHERE status = 'published'`.
 
+Уточнение по MIS-23 (миграция `0002_mis23_access_model`): `materials`
+дополнен `approved_by`/`approved_version` — кто и какую версию одобрил,
+отдельно от `material_versions.reviewer_id` (рецензент конкретной версии).
+`approved_version` — FK на `material_versions(material_id, version)`: нельзя
+одобрить версию, которой не существует. Изменение текста требует нового
+одобрения — обеспечивается приложением (новая версия стартует не с
+`approved`), а не этой миграцией.
+
 Запуск: `make up`, затем `make test-content`
 (или `cd services/content && uv sync && uv run pytest -q`).

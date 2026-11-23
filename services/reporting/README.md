@@ -11,5 +11,9 @@
 Таблицы: `report_jobs` (`operation_id UNIQUE`), `report_snapshots` (один
 снимок на задание), плюс локальные `outbox_events`/`inbox_messages`.
 
+Уточнение по MIS-23 (миграция `0002_mis23_access_model`): `report_jobs`
+дополнен `owner_subject_id` (субъект IAM, без FK) — `fileId`/`operationId`
+сами по себе не являются полномочием, владелец задания фиксируется явно.
+
 Запуск: `make up`, затем `make test-reporting`
 (или `cd services/reporting && uv sync && uv run pytest -q`).

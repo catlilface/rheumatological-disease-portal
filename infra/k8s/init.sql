@@ -22,6 +22,23 @@ CREATE ROLE app_reporting LOGIN PASSWORD :'service_password';
 CREATE ROLE app_files     LOGIN PASSWORD :'service_password';
 CREATE ROLE app_ai        LOGIN PASSWORD :'service_password';
 
+-- `\set ... \`shell\`` does not fail the script if the shell command errors
+-- (e.g. permission denied reading the secret) - it just leaves the variable
+-- empty, and PASSWORD '' silently stores no password at all. Check for that
+-- directly instead of trusting the shell exit code: ON_ERROR_STOP=1 turns
+-- this RAISE EXCEPTION into a fatal, non-zero-exit initialization failure.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_authid
+        WHERE rolname IN ('app_iam', 'app_screening', 'app_content', 'app_reporting', 'app_files', 'app_ai')
+          AND rolpassword IS NULL
+    ) THEN
+        RAISE EXCEPTION
+            'service-db-password was not read (check it exists and is readable by the postgres OS user, uid 70)';
+    END IF;
+END $$;
+
 REVOKE CONNECT ON DATABASE iam FROM PUBLIC;
 REVOKE CONNECT ON DATABASE screening FROM PUBLIC;
 REVOKE CONNECT ON DATABASE content FROM PUBLIC;

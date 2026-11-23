@@ -21,6 +21,11 @@ umask 077
 mkdir -p .secrets
 test -s .secrets/postgres-password || openssl rand -hex 32 > .secrets/postgres-password
 test -s .secrets/service-db-password || openssl rand -hex 32 > .secrets/service-db-password
+# docker compose (unlike Swarm) bind-mounts file secrets as-is, so this one
+# must be readable by the postgres image's unprivileged "postgres" OS user
+# (uid 70), not just the host user who created it. init.sql hard-fails
+# startup if it still can't read the password, so this step isn't optional.
+chmod 644 .secrets/service-db-password
 export COMPOSE_PROJECT_NAME=rdp-mvp
 docker compose build  # отдельный образ каждого приложения
 cp .env.example .env  # заполнить своими значениями
@@ -31,7 +36,19 @@ curl -fsS http://127.0.0.1:8000/health
 
 Только `127.0.0.1:8000` опубликован на хосте. Остальные соединения идут по внутренним сетям Compose. `infra/k8s/kafka.env` и `infra/k8s/init.sql` общие для двух окружений. Файл `.env` необязателен и относится к BFF. Секреты не отправляются в контекст сборки. Обычная остановка — `docker compose down`; `down -v` **удаляет данные**. SQL-инициализация выполняется на новом томе, не при каждом старте; смена файла пароля не меняет пароль уже созданной БД.
 
-`.secrets/service-db-password` — общий пароль ролей `app_<сервис>` (по одной наименее privileged роли на БД; см. `infra/k8s/init.sql`). Миграции владельцев применяются суперпользователем `postgres`, а не этими ролями: `make up` из корня репозитория поднимает Postgres и прогоняет миграции всех шести сервисов (`docker compose run --rm <сервис> alembic upgrade head`), используя `.secrets/postgres-password` только для самого вызова миграции — он не сохраняется в образе и не передаётся сервисам при обычном `up`.
+**Почему два секрета, а не один.** `postgres-password` — суперпользователь
+`postgres`: имеет право создавать таблицы, роли и т.д., используется только
+для накатывания миграций (`docker compose run --rm <сервис> alembic upgrade
+head`), никогда не передаётся работающим сервисам. `service-db-password` —
+общий пароль шести ролей `app_<сервис>` (по одной наименее privileged роли
+на свою БД, см. `infra/k8s/init.sql`): они не могут создавать таблицы и не
+могут подключиться к пяти чужим БД (изоляция на уровне ролей Postgres, а не
+только сети). Если использовать один и тот же пароль для суперпользователя
+и для прикладных ролей, утечка пароля приложения означала бы утечку
+суперпользователя Postgres — отдельный секрет убирает этот риск, даже
+несмотря на то что для шести ролей сам пароль один и тот же (см. комментарий
+в `infra/k8s/init.sql`: изоляция обеспечивается *именем роли и правами*, а
+не секретностью пароля).
 
 ## Тестовый Kubernetes с нуля
 

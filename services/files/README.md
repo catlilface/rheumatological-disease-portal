@@ -12,5 +12,14 @@
 размер, контрольная сумма), `download_grants`, плюс локальные
 `outbox_events`/`inbox_messages`.
 
+Уточнение по MIS-23 (миграция `0002_mis23_access_model`): `stored_files`
+переименован в `owner_subject_id` (консистентно с остальными сервисами).
+`download_grants` разделяет владельца файла (`owner_subject_id`, пациент) и
+получателя разрешения (`recipient_subject_id`, переименован из `issued_to`,
+например врач); добавлены `version` (ревизия в цепочке продлений — продление
+создаёт новую запись и отзывает старую) и `source_reference` (что запросило
+разрешение, например задание Reporting, без FK). `created_at` переименован
+в `issued_at` — TTL отсчитывается от выдачи.
+
 Запуск: `make up`, затем `make test-files`
 (или `cd services/files && uv sync && uv run pytest -q`).

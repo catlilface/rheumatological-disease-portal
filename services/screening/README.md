@@ -11,5 +11,11 @@
 Таблицы: `questionnaire_versions`, `screening_sessions`, `screening_answers`,
 `screening_results`, плюс локальные `outbox_events`/`inbox_messages`.
 
+Уточнение по MIS-23 (миграция `0002_mis23_access_model`): `owner_subject_id`
+(переименован из `owner_id`) теперь `NOT NULL` — у любой сессии, включая
+гостевую, есть субъект IAM. Добавлен `completion_deadline_at`
+(`started_at` + настраиваемый TTL, по умолчанию 30 дней) — срок на
+завершение анкеты, не срок хранения результата.
+
 Запуск: `make up`, затем `make test-screening`
 (или `cd services/screening && uv sync && uv run pytest -q`).
