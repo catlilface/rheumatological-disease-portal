@@ -64,6 +64,22 @@ jobs:
       - name: Build image
         run: docker build -t rheumatology-portal-frontend:ci .
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+
+      - name: Test nginx routes in the built image
+        env:
+          FRONTEND_URL: http://127.0.0.1:8080
+        run: |
+          container=$(docker run -d -p 127.0.0.1:8080:80 rheumatology-portal-frontend:ci)
+          trap 'docker rm -f "$container"' EXIT
+          if ! curl --fail --silent --show-error --retry 15 --retry-all-errors --retry-delay 1 --max-time 2 "$FRONTEND_URL/" -o /dev/null; then
+            docker logs "$container"
+            exit 1
+          fi
+          npm run test:integration
+
       - name: Log in to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
