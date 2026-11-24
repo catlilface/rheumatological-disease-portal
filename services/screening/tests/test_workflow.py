@@ -56,7 +56,7 @@ def complete_command(session_id, revision, subject="guest"):
 
 
 class FailingOutboxStore(InMemoryScreeningStore):
-    fail_next_event = False
+    fail_next_result_event = False
 
     @contextmanager
     def transaction(self):
@@ -65,10 +65,11 @@ class FailingOutboxStore(InMemoryScreeningStore):
 
             def append_and_fail(event):
                 append_event(event)
-                self.fail_next_event = False
-                raise OSError("outbox unavailable")
+                if ScreeningEvent.FromString(event).HasField("result_changed"):
+                    self.fail_next_result_event = False
+                    raise OSError("outbox unavailable")
 
-            if self.fail_next_event:
+            if self.fail_next_result_event:
                 with patch.object(transaction, "append_event", side_effect=append_and_fail):
                     yield transaction
             else:
@@ -99,8 +100,11 @@ class WorkflowTests(unittest.TestCase):
         with self.storage.transaction() as transaction:
             return transaction.get_latest_result(session_id)
 
-    def events(self):
-        return [ScreeningEvent.FromString(event) for event in self.storage.outbox_events()]
+    def events(self, message=None):
+        events = [ScreeningEvent.FromString(event) for event in self.storage.outbox_events()]
+        if message is None:
+            return events
+        return [event for event in events if event.metadata.operation_id == message.metadata.operation_id]
 
     def save(self, session_id, code, value):
         message = command()
@@ -140,7 +144,43 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(snapshot.subject_id, saved.subject_id)
         return snapshot
 
-    def test_complete_commits_explanation_and_mis22_event_and_retry_is_idempotent(self):
+    def assert_session_event(self, event, message, session_id, version, status, interrupted=False):
+        self.assertEqual(event.WhichOneof("payload"), "session_changed")
+        self.assertEqual(event.metadata.source, "screening")
+        self.assertEqual(event.metadata.schema_version, 1)
+        self.assertEqual(event.metadata.entity_type, "screening_session")
+        self.assertEqual((event.metadata.entity_id, event.metadata.entity_version), (session_id, version))
+        self.assertEqual(event.metadata.operation_id, message.metadata.operation_id)
+        self.assertEqual(event.metadata.causation_id, message.metadata.command_id)
+        self.assertEqual(event.metadata.correlation_id, message.metadata.correlation_id)
+        self.assertTrue(event.metadata.event_id)
+        self.assertTrue(event.metadata.HasField("occurred_at"))
+        change = event.session_changed
+        self.assertEqual(change.session_id, session_id)
+        self.assertEqual((change.survey.survey_id, change.survey.weights_version), ("example", "v1"))
+        self.assertEqual(change.status, status)
+        self.assertEqual(change.interrupted_by_red_flag, interrupted)
+
+    def test_session_events_track_start_ordinary_save_and_abandonment(self):
+        start = start_command()
+        operation = self.workflow.execute(start)
+        self.assert_succeeded(operation)
+        session_id = operation.resources[0].resource_id
+        save = self.save(session_id, "A1", "four")
+        abandon = command()
+        abandon.abandon.session_id = session_id
+        abandon.abandon.expected_session_version = 2
+        outcome = self.workflow.execute(abandon)
+        self.assert_succeeded(outcome)
+        self.assertEqual(self.workflow.execute(abandon), outcome)
+
+        started, answered, abandoned = self.events()
+        self.assert_session_event(started, start, session_id, 1, screening.SESSION_STATUS_IN_PROGRESS)
+        self.assert_session_event(answered, save, session_id, 2, screening.SESSION_STATUS_IN_PROGRESS)
+        self.assert_session_event(abandoned, abandon, session_id, 3, screening.SESSION_STATUS_ABANDONED)
+        self.assertEqual(len({event.metadata.event_id for event in self.events()}), 3)
+
+    def test_complete_commits_explanation_and_mis22_events_and_retry_is_idempotent(self):
         session_id = self.ready_session()
         message = complete_command(session_id, self.session(session_id).version)
         first = self.workflow.execute(message)
@@ -159,7 +199,9 @@ class WorkflowTests(unittest.TestCase):
             [(r.resource_type, r.resource_id, r.version) for r in first.resources],
             [("screening_session", session_id, session.version), ("screening_result", saved.result_id, 1)],
         )
-        (event,) = self.events()
+        session_event, event = self.events(message)
+        self.assert_session_event(session_event, message, session_id, session.version,
+                                  screening.SESSION_STATUS_COMPLETED)
         snapshot = self.assert_event(event, message, saved)
         self.assertEqual(snapshot.total_score, 10)
         self.assertEqual(snapshot.level, screening.SCREENING_LEVEL_MEDIUM)
@@ -195,7 +237,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((session.status, session.version), ("in_progress", 2))
         self.assertEqual(session.answers["A1"].value, "four")
         self.assertIsNone(self.result(session_id))
-        self.assertEqual(self.events(), [])
+        self.assertEqual(self.events(message), [])
 
     def test_tampered_wire_fields_are_ignored_and_cannot_change_score_or_replay(self):
         session_id = self.ready_session()
@@ -207,7 +249,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.workflow.execute(message), result)
         calculation = self.result(session_id).calculation
         self.assertEqual((calculation.total_score, calculation.level), (10, "medium"))
-        self.assertEqual(len(self.events()), 1)
+        self.assertEqual(len(self.events(message)), 2)
 
     def test_stale_revision_and_wrong_subject_cannot_complete(self):
         session_id = self.ready_session()
@@ -219,9 +261,9 @@ class WorkflowTests(unittest.TestCase):
                 operation = self.workflow.execute(message)
                 self.assertEqual(operation.state, metadata.OPERATION_STATE_REJECTED)
                 self.assertEqual(operation.error.code, code)
+                self.assertEqual(self.events(message), [])
         self.assertEqual(self.session(session_id).version, 5)
         self.assertIsNone(self.result(session_id))
-        self.assertEqual(self.events(), [])
 
     def test_reusing_command_id_with_changed_payload_cannot_overwrite_outcome(self):
         session_id = self.ready_session()
@@ -233,7 +275,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(conflict.state, metadata.OPERATION_STATE_REJECTED)
         self.assertEqual(conflict.error.code, "COMMAND_ID_CONFLICT")
         self.assertEqual(self.workflow.execute(message), original)
-        self.assertEqual(len(self.events()), 1)
+        self.assertEqual(len(self.events(message)), 2)
 
     def test_conflicting_command_with_new_operation_id_records_rejection(self):
         session_id = self.ready_session()
@@ -250,30 +292,31 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(metadata.Operation.FromString(saved.response), conflict)
         self.assertEqual(self.workflow.execute(changed), conflict)
         self.assertEqual(self.workflow.execute(message), original)
-        self.assertEqual(len(self.events()), 1)
+        self.assertEqual(len(self.events(message)), 2)
+        self.assertEqual(self.events(changed), [])
 
-    def test_event_correlates_to_operation_when_command_correlation_is_blank(self):
+    def test_events_correlate_to_operation_when_command_correlation_is_blank(self):
         session_id = self.ready_session()
         message = complete_command(session_id, 5)
         message.metadata.correlation_id = " "
         self.assert_succeeded(self.workflow.execute(message))
-        (event,) = self.events()
-        self.assertEqual(event.metadata.correlation_id, message.metadata.operation_id)
+        self.assertEqual([event.metadata.correlation_id for event in self.events(message)],
+                         [message.metadata.operation_id] * 2)
 
     def test_outbox_failure_rolls_back_result_session_and_operation_before_retry(self):
         session_id = self.ready_session()
         message = complete_command(session_id, 5)
-        self.storage.fail_next_event = True
+        self.storage.fail_next_result_event = True
         with self.assertRaisesRegex(OSError, "outbox unavailable"):
             self.workflow.execute(message)
         self.assertEqual((self.session(session_id).status, self.session(session_id).version),
                          ("in_progress", 5))
         self.assertIsNone(self.result(session_id))
-        self.assertEqual(self.events(), [])
+        self.assertEqual(self.events(message), [])
         with self.storage.transaction() as txn:
             self.assertIsNone(txn.get_operation(message.metadata.operation_id))
         self.assert_succeeded(self.workflow.execute(message))
-        self.assertEqual(len(self.events()), 1)
+        self.assertEqual(len(self.events(message)), 2)
 
     def test_concurrent_completions_create_one_result_and_one_completion_event(self):
         session_id = self.ready_session()
@@ -285,7 +328,9 @@ class WorkflowTests(unittest.TestCase):
             (metadata.OPERATION_STATE_SUCCEEDED, metadata.OPERATION_STATE_REJECTED),
         )
         self.assertEqual(self.result(session_id).version, 1)
-        self.assertEqual(len(self.events()), 1)
+        for message, operation in zip(messages, operations, strict=True):
+            expected = ["session_changed", "result_changed"] if operation.state == metadata.OPERATION_STATE_SUCCEEDED else []
+            self.assertEqual([event.WhichOneof("payload") for event in self.events(message)], expected)
 
     def test_immediate_flag_then_continuation_and_completion_preserve_one_result_identity(self):
         session_id = self.start()
@@ -293,7 +338,10 @@ class WorkflowTests(unittest.TestCase):
         urgent = self.result(session_id)
         self.assertEqual((urgent.version, urgent.calculation.level), (1, "red_flag"))
         self.assertTrue(self.session(session_id).interrupted_by_red_flag)
-        snapshot = self.assert_event(self.events()[0], flag, urgent)
+        interrupted, result_event = self.events(flag)
+        self.assert_session_event(interrupted, flag, session_id, 2, screening.SESSION_STATUS_IN_PROGRESS,
+                                  interrupted=True)
+        snapshot = self.assert_event(result_event, flag, urgent)
         self.assertFalse(snapshot.HasField("total_score"))
         self.assertEqual(list(snapshot.red_flag_codes), ["example_flag"])
         self.assertEqual(snapshot.level, screening.SCREENING_LEVEL_RED_FLAG)
@@ -302,6 +350,8 @@ class WorkflowTests(unittest.TestCase):
         resume.continue_after_red_flag.session_id = session_id
         resume.continue_after_red_flag.expected_session_version = 2
         self.assert_succeeded(self.workflow.execute(resume))
+        (resumed,) = self.events(resume)
+        self.assert_session_event(resumed, resume, session_id, 3, screening.SESSION_STATUS_IN_PROGRESS)
         for code, value in (("A1", "nine"), ("Б1", True), ("Г1", True), ("В1", False)):
             self.save(session_id, code, value)
         message = complete_command(session_id, 7)
@@ -310,8 +360,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual((final.result_id, final.version), (urgent.result_id, 2))
         self.assertEqual((final.calculation.level, final.calculation.total_score), ("red_flag", 19))
         self.assertFalse(final.calculation.red_flags[0].matched_current_answer)
-        self.assertEqual(len(self.events()), 2)
-        self.assert_event(self.events()[1], message, final)
+        completed, result_event = self.events(message)
+        self.assert_session_event(completed, message, session_id, 8, screening.SESSION_STATUS_COMPLETED)
+        self.assert_event(result_event, message, final)
         with self.storage.transaction() as txn:
             self.assertEqual(txn.get_result(urgent.result_id, 1), urgent)
 

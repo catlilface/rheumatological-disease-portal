@@ -1,4 +1,4 @@
-"""Apply Screening commands and write v1 result events in one transaction."""
+"""Apply Screening commands and write v1 events in one transaction."""
 
 from __future__ import annotations
 
@@ -115,19 +115,35 @@ def result_message(result: StoredResult) -> screening.ScreeningResult:
     return message
 
 
-def _event_for_result(result: StoredResult, command_meta, now: datetime) -> bytes:
+def _new_event(entity_type: str, entity_id: str, entity_version: int, command_meta, now: datetime) -> ScreeningEvent:
     event = ScreeningEvent()
     event.metadata.event_id = str(uuid7())
     event.metadata.schema_version = 1
     event.metadata.source = "screening"
-    event.metadata.entity_type = "screening_result"
-    event.metadata.entity_id = result.result_id
-    event.metadata.entity_version = result.version
+    event.metadata.entity_type = entity_type
+    event.metadata.entity_id = entity_id
+    event.metadata.entity_version = entity_version
     event.metadata.operation_id = command_meta.operation_id
     event.metadata.causation_id = command_meta.command_id
     correlation = command_meta.correlation_id
     event.metadata.correlation_id = correlation if correlation.strip() else command_meta.operation_id
     event.metadata.occurred_at.FromDatetime(now)
+    return event
+
+
+def _event_for_session(session: StoredSession, command_meta, now: datetime) -> bytes:
+    event = _new_event("screening_session", session.session_id, session.version, command_meta, now)
+    payload = event.session_changed
+    payload.session_id = session.session_id
+    payload.survey.survey_id = session.survey_id
+    payload.survey.weights_version = session.weights_version
+    payload.status = SESSION_STATUSES[session.status]
+    payload.interrupted_by_red_flag = session.interrupted_by_red_flag
+    return event.SerializeToString(deterministic=True)
+
+
+def _event_for_result(result: StoredResult, command_meta, now: datetime) -> bytes:
+    event = _new_event("screening_result", result.result_id, result.version, command_meta, now)
     event.result_changed.result.CopyFrom(result_message(result))
     return event.SerializeToString(deterministic=True)
 
@@ -188,6 +204,7 @@ class ScreeningWorkflow:
             except ResultSnapshotUnavailable as exc:
                 _reject(operation, "RESULT_SNAPSHOT_UNAVAILABLE", str(exc))
             else:
+                transaction.append_event(_event_for_session(session, info, now))
                 operation.state = metadata.OPERATION_STATE_SUCCEEDED
                 operation.resources.add(
                     resource_type="screening_session",
@@ -195,6 +212,7 @@ class ScreeningWorkflow:
                     version=session.version,
                 )
                 if result is not None:
+                    transaction.append_event(_event_for_result(result, info, now))
                     operation.resources.add(
                         resource_type="screening_result",
                         resource_id=result.result_id,
@@ -223,9 +241,9 @@ class ScreeningWorkflow:
         session = replace(session, version=session.version + 1)
 
         if action == "save_answer":
-            return self._save_answer(transaction, session, request.answer, info, now)
+            return self._save_answer(transaction, session, request.answer, now)
         if action == "complete":
-            return self._complete(transaction, session, info, now)
+            return self._complete(transaction, session, now)
         if action == "continue_after_red_flag":
             if not session.interrupted_by_red_flag:
                 raise _Rejected("SESSION_NOT_INTERRUPTED", "Screening session is not interrupted.")
@@ -269,7 +287,7 @@ class ScreeningWorkflow:
         transaction.put_session(session)
         return session
 
-    def _save_answer(self, transaction, session, answer, info, now):
+    def _save_answer(self, transaction, session, answer, now):
         if session.interrupted_by_red_flag:
             raise _Rejected("SESSION_INTERRUPTED", "Continue the screening session first.")
         field = answer.WhichOneof("value")
@@ -299,10 +317,9 @@ class ScreeningWorkflow:
         result = None
         if new_flags:
             result = self._record_result(transaction, session, calculation, previous, now)
-            transaction.append_event(_event_for_result(result, info, now))
         return session, result
 
-    def _complete(self, transaction, session, info, now):
+    def _complete(self, transaction, session, now):
         previous = transaction.get_latest_result(session.session_id)
         rules = transaction.get_questionnaire(
             session.survey_id, session.weights_version, session.disclaimer_version,
@@ -317,7 +334,6 @@ class ScreeningWorkflow:
             interrupted_by_red_flag=False, final_result_id=result.result_id,
         )
         transaction.put_session(session)
-        transaction.append_event(_event_for_result(result, info, now))
         return session, result
 
     def _record_result(

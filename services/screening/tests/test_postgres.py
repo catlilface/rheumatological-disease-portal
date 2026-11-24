@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 from uuid import UUID, uuid7
 
 from contracts.common.v1 import metadata_pb2 as metadata
+from contracts.common.v1 import screening_pb2 as screening
 from contracts.events.v1.screening_pb2 import ScreeningEvent
 from pg8000.dbapi import DatabaseError, connect
 
@@ -46,22 +47,23 @@ class PostgresTransactionTests(unittest.TestCase):
 
 
 class FailingPostgresStore(PostgresScreeningStore):
-    fail_event = False
+    fail_result_event = False
 
     @contextmanager
     def transaction(self):
         with super().transaction() as transaction:
-            if not self.fail_event:
+            if not self.fail_result_event:
                 yield transaction
                 return
 
             append = transaction.append_event
 
-            def insert_twice(event):
+            def duplicate_result_event(event):
                 append(event)
-                append(event)
+                if ScreeningEvent.FromString(event).HasField("result_changed"):
+                    append(event)
 
-            with patch.object(transaction, "append_event", side_effect=insert_twice):
+            with patch.object(transaction, "append_event", side_effect=duplicate_result_event):
                 yield transaction
 
 
@@ -168,7 +170,23 @@ class PostgresWorkflowTests(unittest.TestCase):
         self.assertEqual(result.disclaimer, "Test disclaimer one.")
         self.assertEqual((result.calculation.total_score, result.calculation.matched_range), (11, (11, None)))
         self.assertEqual(result.calculation.reason, "score")
-        ((event_id, entity_id, entity_version, event),) = self.events(message.metadata.operation_id)
+        events = self.events(message.metadata.operation_id)
+        self.assertCountEqual([row[3].WhichOneof("payload") for row in events],
+                              ["session_changed", "result_changed"])
+        by_payload = {row[3].WhichOneof("payload"): row for row in events}
+        session_event_id, entity_id, entity_version, event = by_payload["session_changed"]
+        self.assertEqual(UUID(session_event_id).version, 7)
+        self.assertEqual((entity_id, entity_version), (session_id, 6))
+        self.assertEqual(event.metadata.entity_type, "screening_session")
+        self.assertEqual((event.metadata.event_id, event.metadata.entity_id, event.metadata.entity_version),
+                         (session_event_id, entity_id, entity_version))
+        self.assertEqual(event.session_changed.session_id, session_id)
+        self.assertEqual(event.session_changed.survey.survey_id, self.survey)
+        self.assertEqual(event.session_changed.survey.weights_version, "v1")
+        self.assertEqual(event.session_changed.status, screening.SESSION_STATUS_COMPLETED)
+        self.assertFalse(event.session_changed.interrupted_by_red_flag)
+
+        event_id, entity_id, entity_version, event = by_payload["result_changed"]
         self.assertEqual(UUID(event_id).version, 7)
         self.assertEqual((entity_id, entity_version), (result_id, 1))
         self.assertEqual((event.metadata.event_id, event.metadata.entity_id), (event_id, entity_id))
@@ -178,18 +196,22 @@ class PostgresWorkflowTests(unittest.TestCase):
         session_id = self.start()
         self.ready(session_id)
         message = self.complete(session_id)
-        self.storage.fail_event = True
+        self.storage.fail_result_event = True
         with self.assertRaises(DatabaseError):
             self.workflow.execute(message)
-        self.storage.fail_event = False
+        self.storage.fail_result_event = False
         with self.storage.transaction() as transaction:
-            self.assertEqual(transaction.get_session(session_id).status, "in_progress")
+            session = transaction.get_session(session_id)
+            self.assertEqual((session.status, session.version), ("in_progress", 5))
             self.assertIsNone(transaction.get_latest_result(session_id))
             self.assertIsNone(transaction.get_operation(message.metadata.operation_id))
             self.assertFalse(transaction.has_command(message.metadata.command_id))
         self.assertEqual(self.events(message.metadata.operation_id), [])
         self.execute_success(message)
-        self.assertEqual(len(self.events(message.metadata.operation_id)), 1)
+        self.assertCountEqual(
+            [row[3].WhichOneof("payload") for row in self.events(message.metadata.operation_id)],
+            ["session_changed", "result_changed"],
+        )
 
     def test_parallel_completion_and_command_conflict_have_persistent_outcomes(self):
         session_id = self.start()
@@ -201,7 +223,14 @@ class PostgresWorkflowTests(unittest.TestCase):
         self.assertCountEqual(
             [a.state, b.state], [metadata.OPERATION_STATE_SUCCEEDED, metadata.OPERATION_STATE_REJECTED],
         )
-        self.assertEqual(sum(len(self.events(m.metadata.operation_id)) for m in (first, second)), 1)
+        for message, operation in ((first, a), (second, b)):
+            expected = []
+            if operation.state == metadata.OPERATION_STATE_SUCCEEDED:
+                expected = ["session_changed", "result_changed"]
+            self.assertCountEqual(
+                [row[3].WhichOneof("payload") for row in self.events(message.metadata.operation_id)],
+                expected,
+            )
 
         conflict = self.complete(session_id, 6)
         conflict.metadata.command_id = first.metadata.command_id
