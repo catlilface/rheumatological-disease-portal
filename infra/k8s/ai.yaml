@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ai}
+  template:
+    metadata:
+      labels: {app: ai}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: ai
+        image: rdp-ai:mvp
+        env:
+        - {name: PGHOST, value: postgres}
+        volumeMounts:
+        - {name: database, mountPath: /run/secrets, readOnly: true}
+        readinessProbe:
+          exec:
+            command: [python, database.py, ai]
+          periodSeconds: 10
+          timeoutSeconds: 8
+      volumes:
+      - name: database
+        secret:
+          secretName: db-app-ai
+          items: [{key: password, path: db-password}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai
+spec:
+  podSelector:
+    matchLabels: {app: ai}
+  policyTypes: [Ingress]
+  ingress: []

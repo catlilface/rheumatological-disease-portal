@@ -1,9 +1,15 @@
 #!/bin/sh
-# Administrative local-Compose job. Do not pass the admin secret to dbmate or the apps.
+# Administrative job for the local Compose and Kubernetes stacks. Do not pass the admin secret to dbmate or the apps.
 set -eu
 export PGHOST=postgres PGUSER=postgres
 PGPASSWORD=$(cat /run/secrets/postgres-password); export PGPASSWORD
-psql -X -v ON_ERROR_STOP=1 -d postgres -c 'REVOKE CONNECT, TEMP ON DATABASE postgres, template1 FROM PUBLIC'
+psql -X -v ON_ERROR_STOP=1 -d postgres <<'SQL'
+REVOKE CONNECT, TEMP ON DATABASE postgres, template1 FROM PUBLIC;
+-- An existing scaffold volume can also contain the six pre-migration databases.
+-- Preserve their data without granting the new service roles access via PUBLIC.
+SELECT format('REVOKE CONNECT, TEMP ON DATABASE %I FROM PUBLIC', datname)
+FROM pg_database WHERE datname IN ('iam', 'screening', 'content', 'reporting', 'files', 'ai') \gexec
+SQL
 for owner in iam screening content reporting files ai; do
     db=mis_$owner; app=${db}_app; migrator=${db}_migrator
     APP_PASSWORD=$(cat "/credentials/apps/$owner"); export APP_PASSWORD

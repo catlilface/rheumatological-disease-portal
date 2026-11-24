@@ -1,4 +1,4 @@
-"""Each Compose service receives only its own password. No SQL access in the legacy k8s stack."""
+"""Each service receives only its own password in Compose and Kubernetes."""
 import os
 import sys
 from contextlib import closing

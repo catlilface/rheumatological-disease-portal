@@ -29,7 +29,7 @@ def reply(response=None, *, error=None, summary=''):
 
 
 async def serve(name, register, handlers, command_type=None):
-    if 'PGHOST' in os.environ:  # Compose uses SQL; the separate k8s scaffold does not.
+    if 'PGHOST' in os.environ:  # Both local Compose and Kubernetes verify owner migrations.
         check_database(name)
     server = grpc.aio.server()
     register(handlers, server)

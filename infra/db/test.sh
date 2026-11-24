@@ -48,16 +48,16 @@ SQL
     done
     app "$owner" "$owner" < "infra/db/tests/$owner.sql"
     rows[$i]=$(fixture_rows "$owner" "${fixtures[$i]}")
-    [[ -n ${rows[$i]} ]]
+    [[ -n ${rows[$i]} ]] || { echo "Missing fixture in $owner" >&2; exit 1; }
     ids[$i]=$(app "$owner" "$owner" -c "INSERT INTO inbox_messages(message_id,outcome) VALUES (uuidv7(), '\"fixture\"') RETURNING message_id")
     history[$i]=$(admin "mis_$owner" 'SELECT version,xmin FROM migration.schema_migrations ORDER BY version')
-    [[ -n ${history[$i]} ]]
+    [[ -n ${history[$i]} ]] || { echo "Missing migration history in $owner" >&2; exit 1; }
 done
 docker compose up -d --no-deps --force-recreate --wait postgres
 make migrate
 for i in "${!owners[@]}"; do
     owner=${owners[$i]}
-    [[ $(app "$owner" "$owner" -c "SELECT message_id FROM inbox_messages WHERE outcome='\"fixture\"'") == "${ids[$i]}" ]]
+    [[ $(app "$owner" "$owner" -c "SELECT message_id FROM inbox_messages WHERE outcome='\"fixture\"'") == "${ids[$i]}" ]] || { echo "Missing inbox marker in $owner" >&2; exit 1; }
     [[ $(fixture_rows "$owner" "${fixtures[$i]}") == "${rows[$i]}" ]] || { echo "Changed fixture in $owner" >&2; exit 1; }
     [[ $(admin "mis_$owner" 'SELECT version,xmin FROM migration.schema_migrations ORDER BY version') == "${history[$i]}" ]] || { echo "Replayed migration in $owner" >&2; exit 1; }
 done

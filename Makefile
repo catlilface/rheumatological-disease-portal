@@ -1,4 +1,4 @@
-.PHONY: up down migrate test-db prepare
+.PHONY: up down migrate test-db prepare test-kind test-infra
 
 up: migrate
 	docker compose up --build -d --wait
@@ -16,3 +16,10 @@ down:
 
 test-db:
 	bash infra/db/test.sh
+
+test-infra:
+	bash infra/tests/smoke-guards.sh
+	bash infra/tests/secret-guards.sh
+
+test-kind:
+	bash infra/kind/check.sh
