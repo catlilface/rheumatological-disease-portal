@@ -11,8 +11,11 @@ x-build: &build
 
 x-grpc: &grpc
   restart: unless-stopped
+  environment:
+    - PGHOST=postgres
   networks:
     - rpc
+    - databases
   healthcheck:
     <<: *health
     test: [CMD, python, -c, "import grpc; from grpc_health.v1 import health_pb2 as p,health_pb2_grpc as g; assert g.HealthStub(grpc.insecure_channel('localhost:50051')).Check(p.HealthCheckRequest(),timeout=3).status==1"]
@@ -20,10 +23,12 @@ x-grpc: &grpc
 x-worker: &worker
   <<: *grpc
   environment:
+    PGHOST: postgres
     KAFKA_BOOTSTRAP_SERVERS: 'kafka:19092'
   networks:
     - rpc
     - broker
+    - databases
   depends_on:
     kafka:
       condition: service_healthy
@@ -50,27 +55,71 @@ services:
     <<: *grpc
     image: rdp-iam:mvp
     build: {<<: *build, args: {SERVICE: iam}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro"]
 
   files:
     <<: *grpc
     image: rdp-files:mvp
     build: {<<: *build, args: {SERVICE: files}}
-    networks: [rpc, objects]
+    networks:
+      - rpc
+      - objects
+      - databases
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/files:/run/secrets/db-password:ro"]
 
   screening:
     <<: *worker
     image: rdp-screening:mvp
     build: {<<: *build, args: {SERVICE: screening}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro"]
 
   content:
     <<: *worker
     image: rdp-content:mvp
     build: {<<: *build, args: {SERVICE: content}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/content:/run/secrets/db-password:ro"]
 
   reporting:
     <<: *worker
     image: rdp-reporting:mvp
     build: {<<: *build, args: {SERVICE: reporting}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/reporting:/run/secrets/db-password:ro"]
+
+  ai:
+    image: rdp-ai:mvp
+    build: {<<: *build, args: {SERVICE: ai}}
+    restart: unless-stopped
+    environment: {PGHOST: postgres}
+    networks: [databases, vectors]
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/ai:/run/secrets/db-password:ro"]
+    healthcheck:
+      <<: *health
+      test: [CMD, python, database.py, ai]
+
+  db-bootstrap:
+    profiles: [tools]
+    image: postgres:18.7-alpine3.23
+    networks: [databases]
+    secrets: [postgres-password]
+    volumes:
+      - ./infra/db/bootstrap.sh:/bootstrap.sh:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/db:/credentials:ro
+    entrypoint: [sh, /bootstrap.sh]
+
+  db-migrate:
+    profiles: [tools]
+    image: ghcr.io/amacneil/dbmate:2.38.2
+    networks: [databases]
+    entrypoint: [sh, /db/migrate.sh]
+    volumes:
+      - ./infra/db:/db:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/db/migrators:/credentials:ro
+      - ./services/iam/migrations:/services/iam/migrations:ro
+      - ./services/screening/migrations:/services/screening/migrations:ro
+      - ./services/content/migrations:/services/content/migrations:ro
+      - ./services/reporting/migrations:/services/reporting/migrations:ro
+      - ./services/files/migrations:/services/files/migrations:ro
+      - ./services/ai/migrations:/services/ai/migrations:ro
 
   kafka:
     image: apache/kafka:4.4.0
@@ -95,7 +144,6 @@ services:
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
     volumes:
       - postgres-data:/var/lib/postgresql
-      - ./infra/k8s/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       <<: *health
       test: [CMD, pg_isready, -h, localhost, -U, postgres, -d, postgres]
@@ -125,7 +173,7 @@ services:
 
 secrets:
   postgres-password:
-    file: ./.secrets/postgres-password
+    file: ${MIS_SECRET_DIR:-./.secrets}/postgres-password
 networks:
   edge:
   rpc:

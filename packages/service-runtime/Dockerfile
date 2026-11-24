@@ -12,7 +12,7 @@ COPY contracts contracts
 
 RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. contracts/*/v1/*.proto
 
-COPY packages/service-runtime/runtime.py .
+COPY packages/service-runtime/runtime.py packages/service-runtime/database.py ./
 
 ARG SERVICE
 

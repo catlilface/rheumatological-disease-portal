@@ -1,0 +1,98 @@
+# Applied by up.sh before the application Deployments.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-bootstrap
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 180
+  template:
+    metadata:
+      labels: {app: db-bootstrap}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+      - name: bootstrap
+        image: postgres:18.7-alpine3.23
+        # Pod networking/policy convergence can lag PostgreSQL readiness.
+        command: [sh, -ec, 'until pg_isready -h postgres -U postgres; do sleep 2; done; exec sh /db/bootstrap.sh']
+        volumeMounts:
+        - {name: scripts, mountPath: /db, readOnly: true}
+        - {name: admin, mountPath: /run/secrets, readOnly: true}
+        - {name: credentials, mountPath: /credentials, readOnly: true}
+      volumes:
+      - name: scripts
+        configMap: {name: db-scripts}
+      - name: admin
+        secret:
+          secretName: postgres-password
+          items: [{key: password, path: postgres-password}]
+      - name: credentials
+        secret:
+          secretName: db-bootstrap-passwords
+          items:
+          - {key: app-iam, path: apps/iam}
+          - {key: app-screening, path: apps/screening}
+          - {key: app-content, path: apps/content}
+          - {key: app-reporting, path: apps/reporting}
+          - {key: app-files, path: apps/files}
+          - {key: app-ai, path: apps/ai}
+          - {key: migrator-iam, path: migrators/iam}
+          - {key: migrator-screening, path: migrators/screening}
+          - {key: migrator-content, path: migrators/content}
+          - {key: migrator-reporting, path: migrators/reporting}
+          - {key: migrator-files, path: migrators/files}
+          - {key: migrator-ai, path: migrators/ai}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+spec:
+  suspend: true # up.sh resumes only after db-bootstrap has completed
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels: {app: db-migrate}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      initContainers:
+      - name: wait-postgres
+        image: postgres:18.7-alpine3.23
+        command: [sh, -ec, 'until pg_isready -h postgres -U postgres; do sleep 2; done']
+      containers:
+      - name: migrate
+        image: ghcr.io/amacneil/dbmate:2.38.2
+        command: [sh, /db/migrate.sh]
+        volumeMounts:
+        - {name: scripts, mountPath: /db, readOnly: true}
+        - {name: common, mountPath: /db/common, readOnly: true}
+        - {name: credentials, mountPath: /credentials, readOnly: true}
+        - {name: iam, mountPath: /services/iam/migrations, readOnly: true}
+        - {name: screening, mountPath: /services/screening/migrations, readOnly: true}
+        - {name: content, mountPath: /services/content/migrations, readOnly: true}
+        - {name: reporting, mountPath: /services/reporting/migrations, readOnly: true}
+        - {name: files, mountPath: /services/files/migrations, readOnly: true}
+        - {name: ai, mountPath: /services/ai/migrations, readOnly: true}
+      volumes:
+      - name: scripts
+        configMap: {name: db-scripts}
+      - name: common
+        configMap: {name: db-common}
+      - name: credentials
+        secret: {secretName: db-migrator-passwords}
+      - name: iam
+        configMap: {name: db-migrations-iam}
+      - name: screening
+        configMap: {name: db-migrations-screening}
+      - name: content
+        configMap: {name: db-migrations-content}
+      - name: reporting
+        configMap: {name: db-migrations-reporting}
+      - name: files
+        configMap: {name: db-migrations-files}
+      - name: ai
+        configMap: {name: db-migrations-ai}

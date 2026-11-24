@@ -46,9 +46,6 @@ spec:
         volumeMounts:
         - name: data
           mountPath: "/var/lib/postgresql"
-        - name: init
-          mountPath: "/docker-entrypoint-initdb.d"
-          readOnly: true
         - name: password
           mountPath: "/run/secrets"
           readOnly: true
@@ -65,9 +62,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 8
       volumes:
-      - name: init
-        configMap:
-          name: database-init
       - name: password
         secret:
           secretName: postgres-password
@@ -85,4 +79,12 @@ spec:
       app: postgres
   policyTypes:
   - Ingress
-  ingress: []
+  ingress:
+  - from:
+    - podSelector:
+        matchExpressions:
+        - key: app
+          operator: In
+          values: [iam, screening, content, reporting, files, ai, db-bootstrap, db-migrate]
+    ports:
+    - {protocol: TCP, port: 5432}

@@ -13,18 +13,17 @@ case $mode in
    vector() { docker run --rm -i --network "$vecnet" rdp-bff:mvp python - "$@"; }
    ;;
  k8s)
+   : "${KUBECONFIG:?Set an explicit kubeconfig for the disposable test cluster}"
+   case $(kubectl config current-context) in kind-*|k3d-*) ;; *) echo 'Refusing non-local cluster' >&2; exit 1;; esac
    run() { local s=$1; shift; "${k[@]}" exec -i "svc/$s" -- "$@"; }
-   client="vector-smoke-$$"
-   "${k[@]}" run "$client" --image=rdp-bff:mvp --labels=app=ai --restart=Never --command -- sleep 900
-   trap '"${k[@]}" delete pod "$client" --ignore-not-found --wait=false' EXIT
-   "${k[@]}" wait --for=condition=Ready "pod/$client" --timeout=90s
-   vector() { "${k[@]}" exec -i "$client" -- python - "$@"; }
+   vector() { "${k[@]}" exec -i deploy/ai -- python - "$@"; }
    ;;
  *) exit 2;;
 esac
 sql() { run postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -Atc "$1"; }
 for db in content screening reporting files iam ai; do
-  [[ $(sql "SELECT datname FROM pg_database WHERE datname='$db'") == "$db" ]]
+  db=mis_$db
+  [[ $(sql "SELECT datname FROM pg_database WHERE datname='$db'") == "$db" ]] || { echo "Missing database: $db" >&2; exit 1; }
 done
 sql "CREATE TABLE $id (v text); INSERT INTO $id VALUES ('$id')"
 topic="infra.$id"
@@ -56,8 +55,8 @@ PY
 }
 object PUT; point PUT
 verify() {
-  [[ $(sql "SELECT v FROM $id") == "$id" ]]
-  [[ $(run kafka "$kbin/kafka-console-consumer.sh" --bootstrap-server localhost:19092 --topic "$topic" --from-beginning --max-messages 1 --timeout-ms 15000) == "$id" ]]
+  [[ $(sql "SELECT v FROM $id") == "$id" ]] || { echo 'SQL marker missing' >&2; exit 1; }
+  [[ $(run kafka "$kbin/kafka-console-consumer.sh" --bootstrap-server localhost:19092 --topic "$topic" --from-beginning --max-messages 1 --timeout-ms 15000) == "$id" ]] || { echo 'Kafka marker missing' >&2; exit 1; }
   object GET; point GET
 }
 verify
