@@ -8,6 +8,7 @@ on:
       - "packages/service-runtime/**"
       - "contracts/**"
       - "infra/db/**"
+      - "infra/check-transport.sh"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
       - "docker-compose.yaml"
@@ -34,7 +35,7 @@ jobs:
       - run: make test-db
 
   compose-smoke:
-    name: Compose storage integration
+    name: Compose contracts and storage integration
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -42,7 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make up
-      - run: bash infra/smoke.sh compose
+      - name: Check gRPC contracts, Kafka commands and BFF isolation
+        run: bash infra/check-transport.sh compose
+      - name: Check persistence after storage restart
+        run: bash infra/smoke.sh compose
       - name: Remove test stack and volumes
         if: always()
         run: docker compose down -v
