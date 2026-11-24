@@ -1,0 +1,94 @@
+name: Services CI
+
+on:
+  push:
+    branches: [main]
+    paths: &build-paths
+      - "services/**"
+      - "packages/service-runtime/**"
+      - "contracts/**"
+      - "infra/db/**"
+      - "infra/smoke.sh"
+      - "infra/k8s/kafka.env"
+      - "docker-compose.yaml"
+      - ".env.example"
+      - "Makefile"
+      - ".dockerignore"
+      - ".github/workflows/services.yml"
+  pull_request:
+    paths: *build-paths
+
+concurrency:
+  group: services-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrations:
+    name: Database migrations and role isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test-db
+
+  compose-smoke:
+    name: Compose storage integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: make up
+      - run: bash infra/smoke.sh compose
+      - name: Remove test stack and volumes
+        if: always()
+        run: docker compose down -v
+
+  build:
+    needs: [migrations, compose-smoke]
+    name: ${{ matrix.service }} CI
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [bff, ai, content, files, iam, reporting, screening]
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SERVICE: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        if: matrix.service == 'bff'
+
+      - name: Test BFF
+        if: matrix.service == 'bff'
+        working-directory: services/bff
+        run: uv run --locked pytest -q
+
+      - name: Build BFF image
+        if: matrix.service == 'bff'
+        run: docker build -f services/bff/Dockerfile -t "rheumatology-portal-$SERVICE:ci" .
+
+      # TODO: Добавить модульные тесты для ai, content, files, iam, reporting и screening
+      # по мере реализации. Пока собираем их образы на общем runtime, как в Compose.
+      - name: Build service image
+        if: matrix.service != 'bff'
+        run: |
+          docker build -f packages/service-runtime/Dockerfile --build-arg "SERVICE=$SERVICE" \
+            -t "rheumatology-portal-$SERVICE:ci" .
+
+      - name: Publish image to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rheumatology-portal-$SERVICE:$GITHUB_SHA"
+          docker tag "rheumatology-portal-$SERVICE:ci" "$image"
+          docker push "$image"
