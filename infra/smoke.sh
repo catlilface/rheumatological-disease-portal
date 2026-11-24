@@ -24,6 +24,7 @@ case $mode in
 esac
 sql() { run postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 -Atc "$1"; }
 for db in content screening reporting files iam ai; do
+  if [[ $mode == compose ]]; then db=mis_$db; fi
   [[ $(sql "SELECT datname FROM pg_database WHERE datname='$db'") == "$db" ]]
 done
 sql "CREATE TABLE $id (v text); INSERT INTO $id VALUES ('$id')"

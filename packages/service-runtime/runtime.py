@@ -10,6 +10,8 @@ from google.protobuf.message import DecodeError
 from grpc_health.v1 import health, health_pb2_grpc
 from loguru import logger
 
+from database import check_database
+
 
 def reply(response=None, *, error=None, summary=''):
     """Static gRPC outcome. Log types and status, never payloads or credentials."""
@@ -27,6 +29,8 @@ def reply(response=None, *, error=None, summary=''):
 
 
 async def serve(name, register, handlers, command_type=None):
+    if 'PGHOST' in os.environ:  # Compose uses SQL; the separate k8s scaffold does not.
+        check_database(name)
     server = grpc.aio.server()
     register(handlers, server)
     health_pb2_grpc.add_HealthServicer_to_server(health.aio.HealthServicer(), server)
