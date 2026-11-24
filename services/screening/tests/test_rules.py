@@ -7,7 +7,7 @@ from services.screening.rules import RuleConfigError, RuleRegistry, load_rules
 
 
 EXAMPLE = Path(__file__).with_name("fixtures") / "example_rules.json"
-DRAFT_FLAGS = EXAMPLE.parents[2] / "rule_configs" / "mis-24-red-flags.draft.json"
+DRAFT_FLAGS = EXAMPLE.parents[2] / "rule_configs" / "red_flags.draft.json"
 
 
 class RuleTests(unittest.TestCase):

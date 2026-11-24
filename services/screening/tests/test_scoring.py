@@ -8,7 +8,7 @@ from services.screening.scoring import AnswerError, calculate_result
 
 
 EXAMPLE = Path(__file__).with_name("fixtures") / "example_rules.json"
-DRAFT_FLAGS = EXAMPLE.parents[2] / "rule_configs" / "mis-24-red-flags.draft.json"
+DRAFT_FLAGS = EXAMPLE.parents[2] / "rule_configs" / "red_flags.draft.json"
 NORMAL_RECOMMENDATIONS = {
     "low": "Тестовое сообщение для низкого уровня.",
     "medium": "Тестовое сообщение для среднего уровня.",
