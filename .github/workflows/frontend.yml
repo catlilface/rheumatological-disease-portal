@@ -74,7 +74,10 @@ jobs:
         run: |
           container=$(docker run -d -p 127.0.0.1:8080:80 rheumatology-portal-frontend:ci)
           trap 'docker rm -f "$container"' EXIT
-          curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 "$FRONTEND_URL/" -o /dev/null
+          if ! curl --fail --silent --show-error --retry 15 --retry-all-errors --retry-delay 1 --max-time 2 "$FRONTEND_URL/" -o /dev/null; then
+            docker logs "$container"
+            exit 1
+          fi
           npm run test:integration
 
       - name: Log in to GitHub Container Registry
