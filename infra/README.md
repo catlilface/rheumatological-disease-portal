@@ -4,7 +4,7 @@
 
 | Компонент | Внутренний адрес | Что сохраняется |
 |---|---|---|
-| PostgreSQL 18.7 | `postgres:5432` | Шесть баз владельцев в обоих стендах: `mis_iam`, `mis_content`, `mis_screening`, `mis_reporting`, `mis_files`, `mis_ai`. Compose также создаёт транспортную БД `mis_bff`. |
+| PostgreSQL 18.7 | `postgres:5432` | В Compose и Kubernetes один сервер и шесть отдельных баз: `mis_iam`, `mis_content`, `mis_screening`, `mis_reporting`, `mis_files`, `mis_ai` |
 | Apache Kafka 4.4.0 (KRaft) | `kafka:19092` | Журналы, метаданные и смещения |
 | SeaweedFS 4.54 | `seaweedfs:8888` | Содержимое и индекс filer на одном томе `/data`; клиент — Files |
 | Qdrant 1.20.2 | `qdrant:6333` | Коллекции и векторы; будущий клиент — AI |
@@ -62,7 +62,7 @@ DaemonSet требует privileged/hostNetwork в системном namespace:
 контроллер NetworkPolicy. Одни YAML-политики без enforcement не доказывают запрет подключения.
 
 Kubernetes теперь использует **те же** `infra/db/bootstrap.sh`, `migrate.sh` и миграции владельцев,
-что Compose для шести доменных БД: разные app/migrator роли и Secret каждого приложения.
+что Compose: шесть `mis_*` БД, разные app/migrator роли и Secret каждого приложения.
 BFF не получает SQL-паролей; административный пароль доступен только PostgreSQL/bootstrap,
 dbmate получает только migrator-пароли. AI также развёрнут и проверяет свою БД, без inference/API.
 `infra/k8s/init.sql` не монтируется: теперь он воспроизводит старые БД только в тесте обновления.
