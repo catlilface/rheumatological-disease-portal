@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.15-alpine
+FROM ghcr.io/astral-sh/uv:python3.15-trixie-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,8 +15,8 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY services/bff/app ./app
 
 RUN uv sync --locked --no-dev --no-editable \
-    && addgroup -S app \
-    && adduser -S -D -u 10001 -G app app
+    && groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --no-create-home app
 
 ENV PATH="/app/server/.venv/bin:$PATH"
 
