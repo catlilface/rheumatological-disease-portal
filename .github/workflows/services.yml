@@ -67,13 +67,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-go@v5
         if: matrix.service == 'bff'
+        with:
+          go-version-file: services/bff/go.mod
+          cache-dependency-path: services/bff/go.sum
 
       - name: Test BFF
         if: matrix.service == 'bff'
         working-directory: services/bff
-        run: uv run --locked pytest -q
+        run: |
+          go vet ./...
+          go test -race ./...
 
       - name: Build BFF image
         if: matrix.service == 'bff'
