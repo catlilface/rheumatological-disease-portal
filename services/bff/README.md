@@ -12,12 +12,12 @@ git clone \
     --sparse \
     https://github.com/catlilface/rheumatological-disease-portal.git
 cd rheumatological-disease-portal
-git sparse-checkout set services/bff
+git sparse-checkout set services/bff contracts/http docs
 ```
 
 После выполнения команд в рабочей директории будут доступны файлы сервиса `services/bff` и файлы из корня репозитория.
 
-`--filter=blob:none` позволяет не загружать содержимое всех файлов заранее, а `git sparse-checkout set services/bff` ограничивает набор файлов в рабочей директории.
+`--filter=blob:none` позволяет не загружать содержимое всех файлов заранее, а sparse checkout оставляет BFF, спецификацию для контрактных тестов и документацию.
 
 ## 2. Правила работы с Git
 
@@ -79,27 +79,18 @@ git push -u origin MIS-123
 
 ## 5. Структура backend
 
-Backend использует Python 3.15, FastAPI, Uvicorn и `pydantic-settings`. Окружением и зависимостями управляет `uv`.
+BFF — отдельный Go-модуль. Входящий HTTP-адаптер вызывает прикладные сценарии; сценарии используют доменные модели и порты, но не импортируют HTTP, конфигурацию или конкретное хранилище.
 
-```text
-services/bff/
-├── app/
-│   ├── main.py          # Приложение, роутеры и GET /health
-│   ├── settings.py      # Настройки из окружения и .env
-│   ├── database/        # Заглушка для будущего подключения к БД
-│   ├── domain/          # Pydantic-модели и Protocol-интерфейсы сервисов
-│   ├── routers/         # HTTP-роутеры и DI-провайдеры
-│   ├── fixtures/        # JSON опроса и статический PDF
-│   └── mocks.py         # Stateless mock-сервисы
-├── tests/               # Проверки HTTP и настроек
-├── pyproject.toml       # Зависимости приложения и тестов
-├── uv.lock              # Зафиксированные версии зависимостей
-├── .python-version      # Python 3.15 для uv
-├── Dockerfile
-└── README.md
-```
+| Каталог в `services/bff/` | Ответственность |
+|---|---|
+| `internal/domain/` | Правила агрегатов: переходы и версии скрининга, снимки результата, кабинет пациента, доступ к отчёту и решения модерации. |
+| `internal/application/` | Сценарии по предметным областям, идентификация владельца, идемпотентные команды; контракты репозиториев, часов, генерации ID и проверки паролей. |
+| `internal/adapters/httpapi/` | Привязка методов к `operationId` контракта v1, валидация HTTP, cookie, CORS, перевод ошибок и выдача PDF. |
+| `internal/adapters/{memory,fixtures,credentials}/` | Хранение в памяти процесса, встроенные материалы/анкеты/PDF, scrypt. БД не подключается. |
+| `cmd/bff/main.go` | Сборка зависимостей (DI) и жизненный цикл HTTP-сервера. Каждый экземпляр получает отдельные репозитории. |
+| `tests/` | Независимый тестовый клиент: поднимает Go-процесс с TLS и проверяет ответы по контракту. Python не нужен для запуска BFF и не входит в его образ. |
 
-База данных пока не создаётся и не подключается.
+Для однопроцессного мока операция с агрегатом и запись её результата выполняются в одной критической секции. Поэтому конкурентные повторы команды не применяются дважды. При переходе к постоянному хранилищу эту гарантию должен обеспечить новый адаптер; одного mutex для нескольких реплик недостаточно.
 
 ## 6. Запуск и проверка BFF
 
@@ -107,65 +98,33 @@ services/bff/
 
 ```bash
 cd services/bff
-uv sync --frozen
-uv run uvicorn app.main:app --reload
-uv run pytest -q
+go test -race ./...
+go vet ./...
+go run ./cmd/bff -addr :8000
 ```
 
-`GET /health` остаётся доступен. HTTP-страницы `/docs`, `/redoc` и `/openapi.json`
-по-прежнему отключены; схема доступна программно через `app.openapi()`.
+Версия Go указана в `go.mod`. Готовность: `curl http://localhost:8000/health`.
+
+После запуска откройте [Scalar API Reference](http://localhost:8000/scalar). Страница берёт актуальный контракт и связанные схемы с самого BFF (`/scalar/bff-v1.openapi.yaml`, `/scalar/schemas.yaml`); браузеру нужен доступ к `cdn.jsdelivr.net` для загрузки Scalar. Отдельный контейнер документации не требуется. Если HTTPS завершается на обратном прокси, сохраните внешний `Host` и добавьте к ответу `/scalar` заголовок `Content-Security-Policy: upgrade-insecure-requests`, чтобы браузер загрузил контракт по HTTPS.
+
+На самом BFF `/docs`, `/redoc` и `/openapi.json` не публикуются. Исходный контракт: [OpenAPI v1](../../contracts/http/bff-v1.openapi.yaml). BFF ищет `contracts/http/` среди родительских каталогов и читает `.env` из корня репозитория; переменные окружения имеют приоритет. Dockerfile копирует контракты в образ.
+
+Для работы браузера с защищёнными cookie используйте TLS на прокси либо `go run ./cmd/bff -tls-cert cert.pem -tls-key key.pem`. При терминации TLS на прокси укажите внешний HTTPS origin в `CORS__ALLOW_ORIGINS` и разрешённый Host в `ALLOWED_HOSTS`; заголовки `X-Forwarded-*` не заменяют проверку origin.
 Для браузерного клиента настройте существующие CORS-параметры: origin фронтенда,
 методы `GET`/`POST`, заголовок `Content-Type` и, если требуется читать имя PDF,
 expose-заголовок `Content-Disposition`. По умолчанию cross-origin доступ не разрешён.
 
-## 7. Mock API
+## 7. Mock API v1 для фронтенда
 
-Все пути ниже начинаются с `/api/v1`. JSON использует `snake_case`.
+Все 55 операций [контракта фронтенда](../../docs/bff-rest-api.md) доступны под `/api/v1`. Стенд **только для синтетических данных**. БД, Kafka, IAM, LLM и почта не нужны. У каждого гостя и пациента свои данные в памяти процесса: используйте **одну реплику**; перезапуск сбрасывает все сеансы, результаты и ссылки.
 
-| Метод | Путь | Запрос | Успешный ответ |
-| --- | --- | --- | --- |
-| POST | `/screenings` | `{"survey_id":"rheuma_screening_v1"}` | 201, `ScreeningSession`: `id`, `status`, `survey` |
-| POST | `/screenings/{screening_id}/answers` | `{"question_code":"A1","value":true}` | 200, `AnswerReceipt`: `screening_id`, `answer`, `status` |
-| GET | `/screenings/{screening_id}/results` | — | 200, `ScreeningResult`: идентификаторы, версия весов, статус, балл, риск, red flag, disclaimer |
-| GET | `/screenings/{screening_id}/pdf` | — | 200, `application/pdf`, attachment `screening-{screening_id}.pdf` |
-| GET | `/knowledge-base/articles` | `?limit=20&offset=0` | 200, `ArticlePage`: `items`, `total`, `limit`, `offset` |
-| GET | `/knowledge-base/articles/{slug}` | — | 200, `Article`: `slug`, `title`, `summary`, `body` |
+- Без входа: `GET /api/v1/surveys/rheuma_screening_v1`, `GET /api/v1/knowledge-base/articles`, `GET /api/v1/doctor-route` и чтение форума.
+- Для скрининга создайте гостя (`POST /api/v1/auth/guest-sessions`); для кабинета зарегистрируйте тестовый email и пароль с версией из `GET /api/v1/auth/medical-data-policy`. Для очереди модерации есть `moderator@example.test`: вход в эту роль **отключён**, пока перед запуском BFF не задан `MOCK_MODERATOR_PASSWORD` в окружении. Регистрацией получить роль нельзя.
+- Браузер работает с `HttpOnly; Secure` cookie: используйте HTTPS и `credentials: 'include'`. Для записи нужны доверенный `Origin` и `X-Portal-Request: 1`. Для операций с ответом `202`, а также создания гостя, регистрации и обновления сессии передавайте `Idempotency-Key: <UUID>`. Для повтора создания гостя ранее выданная cookie также обязательна: ключ повтора сам по себе не удостоверяет гостя.
+- При разных origin настройте `CORS__ALLOW_ORIGINS` (точный origin фронтенда), `CORS__ALLOW_CREDENTIALS=true`, методы `GET, POST, PUT, DELETE`, заголовки `Content-Type, X-Portal-Request, Idempotency-Key` и expose-заголовки `Location, Retry-After, Content-Disposition` (списки — JSON-массивы).
 
-`screening_id` — UUID. `limit`: 1–100, `offset`: от 0.
-Булевы ответы передаются как JSON `true`/`false`, варианты выбора — строкой
-`options[].value`, например `{"question_code":"A6","value":"30-60"}`.
-Числа вместо булевых ответов не принимаются.
+**Пример цепочки:** возьмите `survey_id`, `weights_version`, `disclaimer_version` из анкеты, передайте их с `disclaimer_accepted: true` в `POST /api/v1/screenings`. Прочитайте `status_url` из `202`; `resources` успешной операции содержит `resource_type: "screening"` и `resource_id` для `GET /api/v1/screenings/{screening_id}`. Версия этого прохождения идёт в `expected_session_version` следующего ответа. ID и версия результата используются и в пояснении, и при заказе PDF.
 
-Неизвестный ресурс возвращает 404 с `{"detail":"... not found"}`;
-ошибки формы запроса — стандартный FastAPI 422 с массивом `detail`.
+**Границы мока:** операции завершаются сразу (`succeeded` или `rejected`); дополнительные вопросы Б/Г и веса синтетические, пороги `draft`. PDF статический, пояснение — `curated_fallback`. Для препарата создаются слоты на один демонстрационный день в пределах схемы; при включённых напоминаниях — внутренние уведомления. Реального планировщика и push/email нет. Ссылки на один отчёт действуют 24 часа и могут быть отозваны; BFF отдаёт PDF, а не HTML для получателя.
 
-### Контракты и замена mock-сервисов
-
-- `app/domain/screening.py`: `ScreeningSurvey` соответствует JSON из
-  `app/fixtures/screening_survey.json`. Вопросы — discriminated union по `type`
-  (`boolean` / `single_choice`). Модель сохраняет веса, red flags, interrupt,
-  списки блоков и диапазоны порогов с `null` как открытой верхней границей.
-- `app/domain/knowledge.py`: модели статей и пагинированного списка.
-- `app/domain/interfaces.py`: асинхронные `ScreeningService` и `KnowledgeBaseService`.
-  Возврат `None` означает отсутствие ресурса; роутер преобразует его в 404.
-- `app/routers/dependencies.py`: место подключения реальных реализаций вместо mock.
-  В тестах можно использовать `app.dependency_overrides[get_screening_service]` и
-  `app.dependency_overrides[get_knowledge_base_service]`.
-
-### Ограничения mock-реализации
-
-- Каждый старт возвращает один и тот же UUID `11111111-1111-4111-8111-111111111111`.
-  Это fixture, а не созданная или сохранённая сессия.
-- Ответы только возвращаются в receipt, не сохраняются. Проверяется форма запроса,
-  но не существование вопроса, соответствие значения его типу или допустимому варианту.
-- Результат всегда один и тот же: `completed`, score `0`, risk `low`, red flag `false`.
-  Он доступен даже без прохождения опроса и **не является оценкой здоровья**.
-- PDF — валидный статический одностраничный макет, без персональных данных и ответов.
-- База знаний содержит одну демонстрационную статью `about-screening`.
-- Scoring, переходы состояния, прерывание по red flag и авторизация не реализованы.
-  В исходном примере `sum_blocks` ссылается на отсутствующие блоки `Б` и `Г`;
-  эти ссылки сохранены и не проверяются. Латинские и кириллические коды не нормализуются.
-- Идемпотентность реальных POST-операций пока не определена: фиксированный mock-ответ
-  не является гарантией безопасного повтора будущей реализации.
-- Используйте только синтетические данные. Перед подключением реальных данных нужны
-  контроль доступа к сессиям, правила хранения и клинически проверенная логика.
+Проверка цепочек, прав и ответов по JSON Schema: `cd services/bff/tests && uv run --locked pytest -q` из корня репозитория (нужны Go, `uv` и `openssl`). Контрактные тесты не требуют запущенного стенда.

@@ -1,0 +1,129 @@
+{
+  "survey_id": "rheuma_screening_v1",
+  "weights_version": "draft-v1",
+  "disclaimer_version": "demo-v1",
+  "disclaimer": "Демонстрационный скрининг с тестовыми весами, не медицинская услуга и не диагноз.",
+  "thresholds_status": "draft",
+  "confirmation_text": "Я понимаю, что это не медицинская услуга и не диагноз",
+  "urgent_notice": "Обнаружен тестовый красный флаг. Это демонстрационные данные.",
+  "blocks": [
+    {
+      "code": "A",
+      "title": "Суставной синдром",
+      "questions": [
+        {
+          "code": "A1",
+          "text": "Беспокоит ли вас боль или припухлость в суставах?",
+          "type": "boolean",
+          "required": true,
+          "red_flag": false,
+          "weights": {
+            "yes": 1,
+            "no": 0
+          }
+        },
+        {
+          "code": "A6",
+          "text": "Сколько длится скованность после пробуждения?",
+          "type": "single_choice",
+          "required": true,
+          "red_flag": false,
+          "options": [
+            {
+              "value": "lt30",
+              "label": "Меньше 30 минут",
+              "weight": 0
+            },
+            {
+              "value": "30-60",
+              "label": "30–60 минут",
+              "weight": 1
+            },
+            {
+              "value": "gt60",
+              "label": "Больше 60 минут",
+              "weight": 2
+            }
+          ]
+        }
+      ],
+      "red_flag": false,
+      "interrupt": false
+    },
+    {
+      "code": "Б",
+      "title": "Системные проявления",
+      "questions": [
+        {
+          "code": "Б1",
+          "text": "Тестовый признак блока Б?",
+          "type": "boolean",
+          "required": true,
+          "red_flag": false,
+          "weights": {
+            "yes": 4,
+            "no": 0
+          }
+        }
+      ],
+      "red_flag": false,
+      "interrupt": false
+    },
+    {
+      "code": "V",
+      "title": "Красные флаги",
+      "questions": [
+        {
+          "code": "В1",
+          "text": "Острое воспаление одного сустава с невозможностью движения?",
+          "type": "boolean",
+          "required": true,
+          "red_flag": true
+        }
+      ],
+      "red_flag": true,
+      "interrupt": true
+    },
+    {
+      "code": "Г",
+      "title": "Факторы риска",
+      "questions": [
+        {
+          "code": "Г1",
+          "text": "Тестовый признак блока Г?",
+          "type": "boolean",
+          "required": true,
+          "red_flag": false,
+          "weights": {
+            "yes": 4,
+            "no": 0
+          }
+        }
+      ],
+      "red_flag": false,
+      "interrupt": false
+    }
+  ],
+  "scoring": {
+    "sum_blocks": [
+      "A",
+      "Б",
+      "Г"
+    ],
+    "thresholds": {
+      "low": [
+        0,
+        4
+      ],
+      "medium": [
+        5,
+        10
+      ],
+      "high": [
+        11,
+        null
+      ]
+    },
+    "red_flag_overrides": true
+  }
+}

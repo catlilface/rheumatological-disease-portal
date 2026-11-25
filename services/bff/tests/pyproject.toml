@@ -1,0 +1,8 @@
+[project]
+name = "bff-contract-tests"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.27,<1", "pytest>=8,<10", "pyyaml>=6,<7", "jsonschema[format]>=4.20,<5"]
+
+[tool.uv]
+package = false
