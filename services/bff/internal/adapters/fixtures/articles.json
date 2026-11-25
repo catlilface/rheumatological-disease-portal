@@ -1,0 +1,120 @@
+[
+  {
+    "title": "Ревматоидный артрит",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "rheumatoid-arthritis",
+    "section": "diseases",
+    "summary": "Материал для тестирования библиотеки.",
+    "disease_tag": "RA",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  },
+  {
+    "title": "Подагра",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "gout",
+    "section": "diseases",
+    "summary": "Материал для тестирования библиотеки.",
+    "disease_tag": "GOUT",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  },
+  {
+    "title": "Системная красная волчанка",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "lupus",
+    "section": "diseases",
+    "summary": "Материал для тестирования библиотеки.",
+    "disease_tag": "SLE",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  },
+  {
+    "title": "Спондилоартрит",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "spondyloarthritis",
+    "section": "diseases",
+    "summary": "Материал для тестирования библиотеки.",
+    "disease_tag": "SPA",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  },
+  {
+    "title": "Лекарства",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "medications",
+    "section": "medications",
+    "summary": "Материал для тестирования библиотеки.",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  },
+  {
+    "title": "Особые ситуации",
+    "version": 1,
+    "reviewer": {
+      "display_name": "Демонстрационный рецензент"
+    },
+    "published_at": "2026-01-01T00:00:00Z",
+    "slug": "special-situations",
+    "section": "special_situations",
+    "summary": "Материал для тестирования библиотеки.",
+    "template_version": "demo-v1",
+    "body_markdown": "Пример рецензируемого материала. Не медицинская рекомендация.",
+    "sources": [
+      {
+        "title": "Демонстрационный источник",
+        "url": "https://example.org/"
+      }
+    ]
+  }
+]

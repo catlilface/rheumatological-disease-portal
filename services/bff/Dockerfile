@@ -1,27 +1,17 @@
-FROM ghcr.io/astral-sh/uv:python3.15-alpine
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+COPY services/bff/go.mod services/bff/go.sum ./
+RUN go mod download
+COPY services/bff/internal ./internal
+COPY services/bff/cmd ./cmd
+RUN CGO_ENABLED=0 go build -trimpath -o /out/bff ./cmd/bff
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    UV_LINK_MODE=copy \
-    UV_COMPILE_BYTECODE=1 \
-    UV_PYTHON_DOWNLOADS=never
-
-WORKDIR /app/server
-
-COPY services/bff/pyproject.toml services/bff/uv.lock services/bff/.python-version ./
-
-RUN uv sync --locked --no-dev --no-install-project
-
-COPY services/bff/app ./app
-
-RUN uv sync --locked --no-dev --no-editable \
-    && addgroup -S app \
-    && adduser -S -D -u 10001 -G app app
-
-ENV PATH="/app/server/.venv/bin:$PATH"
-
-USER app:app
-
+FROM alpine:3.23
+# nc is used only by the Compose/Kubernetes network-isolation smoke check.
+RUN apk add --no-cache netcat-openbsd
+WORKDIR /app
+COPY contracts/http /app/contracts/http
+COPY --from=build /out/bff /usr/local/bin/bff
+USER 10001:10001
 EXPOSE 8000
-
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["bff"]

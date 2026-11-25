@@ -6,13 +6,16 @@ case ${1:?usage: bash infra/check-transport.sh compose|k8s} in
  k8s) run() { local s=$1; shift; kubectl -n rdp-mvp exec -i "deploy/$s" -- "$@"; }; logs() { kubectl -n rdp-mvp logs deploy/content --since-time="$1"; };;
  *) exit 2;;
 esac
-run bff python - <<'PY'
-import socket
-for service, port in [('postgres',5432), ('qdrant',6333), ('seaweedfs',8888), ('kafka',19092)]:
-    try: socket.create_connection((service,port), timeout=2).close()
-    except (socket.gaierror, TimeoutError, ConnectionRefusedError): continue
-    raise SystemExit(f'unexpected direct access: {service}:{port}')
-PY
+run bff sh -eu <<'SH'
+# First prove that the probe itself works from this container.
+nc -z -w 2 127.0.0.1 8000
+for endpoint in postgres:5432 qdrant:6333 seaweedfs:8888 kafka:19092; do
+    if nc -z -w 2 "${endpoint%:*}" "${endpoint#*:}"; then
+        echo "unexpected direct access: $endpoint" >&2
+        exit 1
+    fi
+done
+SH
 run files python - <<'PY'
 import grpc
 from contracts.grpc.v1 import iam_pb2 as p, iam_pb2_grpc as g

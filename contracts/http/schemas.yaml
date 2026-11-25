@@ -1,0 +1,300 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$defs:
+  # Общие примитивы. UUID записей в целевой системе — v7; коды и slug не UUID.
+  Id: &id {type: string, format: uuid, description: UUIDv7}
+  Version: &version {type: integer, minimum: 1}
+  Text: &text {type: string, minLength: 1}
+  Instant: &instant {type: string, format: date-time}
+  Date: &date {type: string, format: date}
+  Count: &count {type: integer, minimum: 0}
+  Page:
+    type: object
+    required: [items, total, offset, limit]
+    properties: {items: {type: array}, total: *count, offset: *count, limit: {type: integer, minimum: 1, maximum: 100}}
+  Error:
+    type: object
+    required: [code, message, request_id]
+    properties:
+      code: *text
+      message: *text
+      request_id: *text
+      fields: {type: array, items: {type: object, required: [field, code], properties: {field: *text, code: *text}}}
+  Accepted:
+    type: object
+    required: [operation_id, status_url]
+    properties: {operation_id: *id, status_url: {type: string, format: uri-reference}}
+  Operation:
+    type: object
+    required: [operation_id, state, resources, updated_at]
+    properties:
+      operation_id: *id
+      state: {enum: [pending, processing, succeeded, rejected, failed]}
+      resources: {type: array, items: {type: object, required: [resource_type, resource_id], properties: {resource_type: *text, resource_id: *id, version: *version}}}
+      updated_at: *instant
+      error: {type: object, required: [code, message], properties: {code: *text, message: *text}, description: Только для rejected/failed.}
+  Consent:
+    type: object
+    additionalProperties: false
+    required: [version, accepted]
+    properties: {version: *text, accepted: {const: true}}
+  Policy:
+    type: object
+    required: [version, text, document_url]
+    properties: {version: *text, text: *text, document_url: {type: string, format: uri-reference}}
+  Credentials:
+    type: object
+    additionalProperties: false
+    required: [email, password]
+    properties: {email: &email {type: string, format: email, maxLength: 254}, password: &password {type: string, format: password, writeOnly: true, minLength: 1, maxLength: 256}}
+  Registration:
+    type: object
+    additionalProperties: false
+    required: [email, password, medical_data_consent]
+    properties: {email: *email, password: *password, medical_data_consent: {$ref: '#/$defs/Consent'}}
+  Principal:
+    type: object
+    required: [kind, roles, session_expires_at]
+    properties: {kind: {enum: [guest, member, staff]}, roles: {type: array, items: {enum: [patient, admin, medical_reviewer, moderator]}}, session_expires_at: *instant}
+  # Скрининг: порядок блоков/вопросов принадлежит данной редакции анкеты.
+  DisclaimerFields:
+    type: object
+    required: [disclaimer_version, disclaimer]
+    properties: {disclaimer_version: *text, disclaimer: *text}
+  Question:
+    type: object
+    required: [code, type, text, required, red_flag]
+    properties: {code: *text, text: *text, required: {type: boolean}, red_flag: {type: boolean}, type: {enum: [boolean, single_choice]}}
+    oneOf:
+      - properties: {type: {const: boolean}, weights: {type: object, required: ['yes', 'no'], properties: {'yes': {type: integer}, 'no': {type: integer}}}}
+      - required: [options]
+        properties: {type: {const: single_choice}, options: {type: array, minItems: 1, items: {type: object, required: [value, label, weight], properties: {value: *text, label: *text, weight: {type: integer}}}}}
+  Survey:
+    allOf: [{$ref: '#/$defs/DisclaimerFields'}]
+    type: object
+    required: [survey_id, weights_version, thresholds_status, confirmation_text, urgent_notice, blocks, scoring]
+    properties:
+      survey_id: *text
+      weights_version: *text
+      thresholds_status: &approval {enum: [draft, approved]}
+      confirmation_text: {const: 'Я понимаю, что это не медицинская услуга и не диагноз'}
+      urgent_notice: {type: string, minLength: 1, description: Утверждённое предупреждение при красном флаге; доступно вместе с вопросами до отправки ответов.}
+      blocks: {type: array, minItems: 1, items: {type: object, required: [code, title, red_flag, interrupt, questions], properties: {code: *text, title: *text, red_flag: {type: boolean}, interrupt: {type: boolean}, questions: {type: array, minItems: 1, items: {$ref: '#/$defs/Question'}}}}}
+      scoring:
+        type: object
+        required: [sum_blocks, thresholds, red_flag_overrides]
+        properties:
+          sum_blocks: {type: array, items: *text, uniqueItems: true}
+          red_flag_overrides: {const: true}
+          thresholds: {type: object, required: [low, medium, high], properties: {low: &range {type: array, prefixItems: [{type: integer}, {type: [integer, 'null']}], minItems: 2, maxItems: 2}, medium: *range, high: *range}}
+  Start:
+    type: object
+    additionalProperties: false
+    required: [survey_id, weights_version, disclaimer_version, disclaimer_accepted]
+    properties: {survey_id: *text, weights_version: *text, disclaimer_version: *text, disclaimer_accepted: {const: true}}
+  Revision:
+    type: object
+    additionalProperties: false
+    required: [expected_session_version]
+    properties: {expected_session_version: *version}
+  Answer:
+    type: object
+    additionalProperties: false
+    required: [expected_session_version, question_code, value]
+    properties: {expected_session_version: *version, question_code: *text, value: &value {oneOf: [{type: boolean}, {type: string, minLength: 1}]}}
+  ResultRef:
+    type: object
+    additionalProperties: false
+    required: [result_id, version]
+    properties: {result_id: *id, version: *version}
+  Session:
+    allOf: [{$ref: '#/$defs/DisclaimerFields'}]
+    type: object
+    required: [screening_id, survey_id, weights_version, version, status, interrupted_by_red_flag, answers, result]
+    properties:
+      screening_id: *id
+      survey_id: *text
+      weights_version: *text
+      version: *version
+      status: {enum: [in_progress, completed, abandoned]}
+      interrupted_by_red_flag: {type: boolean, description: Прохождение сейчас приостановлено из-за красного флага. После возобновления — false; ранее выявленный флаг сохраняется в результате.}
+      answers: {type: array, items: {type: object, required: [question_code, value], properties: {question_code: *text, value: *value}}}
+      result: {oneOf: [{$ref: '#/$defs/ResultRef'}, {type: 'null'}]}
+  Result:
+    allOf: [{$ref: '#/$defs/DisclaimerFields'}]
+    type: object
+    required: [screening_id, result_id, version, survey_id, weights_version, thresholds_status, risk_level, red_flag, red_flag_codes, score, scoring_complete, block_scores, contributing_answers, recommendations]
+    properties:
+      screening_id: *id
+      result_id: *id
+      version: *version
+      survey_id: *text
+      weights_version: *text
+      thresholds_status: *approval
+      risk_level: {enum: [low, medium, high, red_flag]}
+      red_flag: {type: boolean}
+      red_flag_codes: {type: array, items: *text, uniqueItems: true}
+      score: {type: [integer, 'null']}
+      scoring_complete: {type: boolean}
+      block_scores: {type: object, additionalProperties: {type: integer}}
+      contributing_answers: {type: array, items: {type: object, required: [block_code, question_code, label, value, weighted_score], properties: {block_code: *text, question_code: *text, label: *text, value: *value, weighted_score: {type: integer}}}}
+      recommendations: {type: array, items: {type: object, required: [code, text], properties: {code: *text, text: *text}}}
+    if: {properties: {red_flag: {const: true}}}
+    then: {properties: {risk_level: {const: red_flag}, red_flag_codes: {minItems: 1}}}
+    else: {properties: {risk_level: {enum: [low, medium, high]}, red_flag_codes: {maxItems: 0}, score: {type: integer}, scoring_complete: {const: true}}}
+  # Публичные материалы — только опубликованные рецензированные редакции.
+  Section: &section {enum: [diseases, medications, special_situations]}
+  Reviewed:
+    type: object
+    required: [title, version, reviewer, published_at]
+    properties: {title: *text, version: *version, reviewer: {type: object, required: [display_name], properties: {display_name: *text}}, published_at: *instant}
+  ArticleSummary:
+    allOf: [{$ref: '#/$defs/Reviewed'}]
+    type: object
+    required: [slug, section, summary]
+    properties: {slug: *text, section: *section, summary: *text, disease_tag: {type: string, examples: [RA, GOUT, SLE, SPA]}}
+  ArticlePage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/ArticleSummary'}}}}]}
+  Sources: &sources {type: array, minItems: 1, items: {type: object, required: [title, url], properties: {title: *text, url: {type: string, format: uri}}}}
+  Article:
+    allOf: [{$ref: '#/$defs/ArticleSummary'}]
+    type: object
+    required: [template_version, body_markdown, sources]
+    properties: {template_version: *text, body_markdown: *text, sources: *sources}
+  DoctorRoute:
+    allOf: [{$ref: '#/$defs/Reviewed'}]
+    type: object
+    required: [body_markdown, sources]
+    properties: {body_markdown: *text, sources: *sources}
+  # ЛК: выбранные пользователем препараты/режим, не назначения портала.
+  MedicationInput:
+    type: object
+    additionalProperties: false
+    required: [name, dose_text, local_times, starts_on]
+    properties:
+      name: {type: string, minLength: 1, maxLength: 200}
+      dose_text: {type: string, minLength: 1, maxLength: 200}
+      local_times: {type: array, minItems: 1, uniqueItems: true, items: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}}
+      starts_on: *date
+      ends_on: *date
+  Medication:
+    type: object
+    required: [medication_id, regimen]
+    properties: {medication_id: *id, regimen: {$ref: '#/$defs/MedicationInput'}}
+  MedicationPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/Medication'}}}}]}
+  ReminderSettings:
+    type: object
+    additionalProperties: false
+    required: [enabled, timezone, channels]
+    properties: {enabled: {type: boolean}, timezone: {type: string, description: Зона IANA}, channels: {type: array, uniqueItems: true, items: {enum: [in_app, push, email]}}}
+    if: {properties: {enabled: {const: true}}}
+    then: {properties: {channels: {minItems: 1}}}
+  OnboardingInput:
+    type: object
+    additionalProperties: false
+    required: [diagnosis, medications, reminders]
+    properties: {diagnosis: &diagnosis {type: [string, 'null'], minLength: 1, maxLength: 500}, medications: {type: array, items: {$ref: '#/$defs/MedicationInput'}}, reminders: {$ref: '#/$defs/ReminderSettings'}}
+  Onboarding:
+    type: object
+    required: [completed, diagnosis, medications, reminders]
+    properties: {completed: {type: boolean}, diagnosis: *diagnosis, medications: {type: array, items: {$ref: '#/$defs/Medication'}}, reminders: {$ref: '#/$defs/ReminderSettings'}}
+  DiaryInput:
+    type: object
+    additionalProperties: false
+    required: [entry_date, pain_vas, stiffness_minutes, swollen_joint_count, tender_joint_count, fatigue, flare]
+    properties:
+      entry_date: *date
+      pain_vas: &scale {type: integer, minimum: 0, maximum: 10, description: Предложенная шкала; подтвердить по форме ТЗ.}
+      stiffness_minutes: {type: integer, minimum: 0, maximum: 1440}
+      swollen_joint_count: *count
+      tender_joint_count: *count
+      fatigue: *scale
+      flare: {type: boolean}
+      notes: {type: string, maxLength: 2000}
+  DiaryEntry:
+    type: object
+    required: [entry_id, data]
+    properties: {entry_id: *id, data: {$ref: '#/$defs/DiaryInput'}}
+  DiaryPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/DiaryEntry'}}}}]}
+  Intake:
+    type: object
+    additionalProperties: false
+    required: [status]
+    properties: {status: {enum: [taken, missed]}, note: {type: string, maxLength: 500}}
+  Dose:
+    type: object
+    required: [dose_id, medication_id, scheduled_at, status]
+    properties: {dose_id: *id, medication_id: *id, scheduled_at: *instant, status: {enum: [scheduled, taken, missed]}, marked_at: *instant, note: {type: string}}
+  DosePage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/Dose'}}}}]}
+  Notification:
+    type: object
+    required: [notification_id, channel, text, created_at, read]
+    properties: {notification_id: *id, channel: {enum: [in_app, push, email]}, text: *text, created_at: *instant, read: {type: boolean}, dose_id: *id}
+  NotificationPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/Notification'}}}}]}
+  # PDF: источник фиксируется до генерации, доступ к файлу не следует из ready.
+  ReportRequest:
+    oneOf:
+      - type: object
+        additionalProperties: false
+        required: [kind, result]
+        properties: {kind: {const: screening}, result: {$ref: '#/$defs/ResultRef'}}
+      - type: object
+        additionalProperties: false
+        required: [kind, from_date, to_date, sections]
+        properties: {kind: {const: doctor}, from_date: *date, to_date: *date, sections: {type: array, minItems: 1, uniqueItems: true, items: {enum: [diary, medications, intakes]}}, result: {$ref: '#/$defs/ResultRef'}}
+  Report:
+    type: object
+    required: [report_id, status, specification]
+    properties: {report_id: *id, status: {enum: [pending, generating, ready, failed]}, specification: {$ref: '#/$defs/ReportRequest'}, snapshot_at: *instant, download_url: {type: string, format: uri-reference}, failure_code: *text}
+  Share:
+    type: object
+    required: [share_id, report_id, issued_at, expires_at, url]
+    properties: {share_id: *id, report_id: *id, issued_at: *instant, expires_at: *instant, url: {type: string, format: uri, description: Ссылка для передачи врачу. Фрагмент URL содержит токен для POST /shared-reports/download.}}
+  ShareToken:
+    type: object
+    additionalProperties: false
+    required: [token]
+    properties: {token: {type: string, minLength: 1, maxLength: 2048, writeOnly: true}}
+  Explanation:
+    type: object
+    required: [result, mode, explanation, questions_for_doctor, disclaimer, sources]
+    properties: {result: {$ref: '#/$defs/ResultRef'}, mode: {enum: [generated, curated_fallback]}, explanation: *text, questions_for_doctor: {type: array, items: *text}, sources: {type: array, items: {type: object, required: [slug, version], properties: {slug: *text, version: *version}}}, disclaimer: *text}
+  # Форум: псевдоним, не профиль пациента. Текст — plain text.
+  PostInput:
+    type: object
+    additionalProperties: false
+    required: [body]
+    properties: {body: &post {type: string, minLength: 1, maxLength: 4000}}
+  TopicInput:
+    type: object
+    additionalProperties: false
+    required: [title, body]
+    properties: {title: &title {type: string, minLength: 1, maxLength: 160}, body: *post}
+  Topic:
+    type: object
+    required: [topic_id, title, body, author_alias, created_at]
+    properties: {topic_id: *id, title: *title, body: *post, author_alias: *text, created_at: *instant}
+  TopicPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/Topic'}}}}]}
+  Post:
+    type: object
+    required: [post_id, topic_id, body, author_alias, created_at]
+    properties: {post_id: *id, topic_id: *id, body: *post, author_alias: *text, created_at: *instant}
+  PostPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/Post'}}}}]}
+  Target:
+    type: object
+    additionalProperties: false
+    required: [kind, id]
+    properties: {kind: {enum: [topic, post]}, id: *id}
+  Flag:
+    type: object
+    additionalProperties: false
+    required: [target, reason]
+    properties: {target: {$ref: '#/$defs/Target'}, reason: &reason {type: string, minLength: 1, maxLength: 500}}
+  ModerationItem:
+    type: object
+    required: [case_id, target, kind, body, version]
+    properties: {case_id: *id, target: {$ref: '#/$defs/Target'}, kind: {enum: [submission, complaint]}, body: *post, title: *title, reason: *reason, version: *version}
+  ModerationPage: {allOf: [{$ref: '#/$defs/Page'}, {properties: {items: {items: {$ref: '#/$defs/ModerationItem'}}}}]}
+  Decision:
+    type: object
+    additionalProperties: false
+    required: [action, reason, expected_version]
+    properties: {action: {enum: [approve, reject, hide, dismiss]}, reason: *reason, expected_version: *version}
