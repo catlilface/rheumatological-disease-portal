@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from services.screening.rules import RuleRegistry, load_rules
+from services.screening.registry import LocalRegistry
+from services.screening.rules import load_rules
 from services.screening.scoring import AnswerError, calculate_result
 
 
@@ -160,7 +161,7 @@ class ScoringTests(unittest.TestCase):
                 self.assertEqual(caught.exception.question_code, code)
 
     def test_scores_two_versions_of_the_same_answers_using_the_pinned_definition(self):
-        registry = RuleRegistry()
+        registry = LocalRegistry()
         registry.publish(EXAMPLE)
         self.rules["weights_version"] = "v2"
         self.rules["blocks"][1]["questions"][0]["weights"]["yes"] = 6

@@ -1,9 +1,7 @@
-"""Load and register immutable versions of Screening's JSON rules."""
+"""Load and validate Screening's JSON rules."""
 
 import json
-from copy import deepcopy
 from pathlib import Path
-from threading import Lock
 
 
 class RuleConfigError(ValueError):
@@ -300,33 +298,3 @@ class _RedFlagValidator:
             self.recommendation_validator.references(
                 flag.get("recommendation_codes"), recommendations, f"{field}.recommendation_codes",
             )
-
-
-class RuleRegistry:
-    """A local registry with exact-version lookup and explicit publication."""
-
-    def __init__(self):
-        self._versions = {}
-        self._current = {}
-        self._lock = Lock()
-
-    def publish(self, path: str | Path) -> None:
-        """Validate first, then make a new version current for its scale."""
-        rules = load_rules(path)
-        scale, version = rules["id"], rules["weights_version"]
-        with self._lock:
-            key = (scale, version)
-            if key in self._versions:
-                if json.dumps(self._versions[key], sort_keys=True) != json.dumps(rules, sort_keys=True):
-                    raise RuleConfigError(
-                        version, "$.weights_version", f"rules for {scale!r} require a new version",
-                    )
-                return
-            self._versions[key] = rules
-            self._current[scale] = version
-
-    def get(self, scale: str, version: str | None = None) -> dict:
-        """Return a copy of the requested version, or the current one if omitted."""
-        with self._lock:
-            selected = self._current[scale] if version is None else version
-            return deepcopy(self._versions[scale, selected])

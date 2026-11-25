@@ -11,7 +11,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
-    from .rules import RuleRegistry
+    from .registry import BaseRegistry
     from .scoring import AnswerValue, ScreeningCalculation
 
 
@@ -129,7 +129,7 @@ class _State:
 
 
 class _MemoryTransaction:
-    def __init__(self, state: _State, rules: RuleRegistry):
+    def __init__(self, state: _State, rules: BaseRegistry):
         self._state = state
         self._rules = rules
 
@@ -181,7 +181,7 @@ class _MemoryTransaction:
 class InMemoryScreeningStore(ScreeningStore):
     """Serialize transactions and keep only committed snapshots."""
 
-    def __init__(self, rules: RuleRegistry):
+    def __init__(self, rules: BaseRegistry):
         self._rules = rules
         self._state = _State()
         self._lock = Lock()

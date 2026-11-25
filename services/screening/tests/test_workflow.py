@@ -18,7 +18,7 @@ from contracts.events.v1.screening_pb2 import ScreeningEvent
 from contracts.grpc.v1 import screening_pb2 as queries
 from contracts.grpc.v1 import screening_pb2_grpc as rpc
 
-from services.screening.rules import RuleRegistry
+from services.screening.registry import LocalRegistry
 from services.screening.storage import InMemoryScreeningStore
 from services.screening.workflow import ScreeningWorkflow
 
@@ -78,7 +78,7 @@ class FailingOutboxStore(InMemoryScreeningStore):
 
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.rules = RuleRegistry()
+        self.rules = LocalRegistry()
         self.rules.publish(EXAMPLE)
         self.storage = FailingOutboxStore(self.rules)
         self.workflow = ScreeningWorkflow(self.storage)

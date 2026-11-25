@@ -11,7 +11,7 @@ from contracts.grpc.v1 import screening_pb2_grpc as rpc
 from runtime import reply, serve
 
 from .postgres_store import PostgresScreeningStore, connect_screening
-from .rules import RuleRegistry
+from .registry import LocalRegistry
 from .storage import (
     DEMO_DISCLAIMER, DEMO_DISCLAIMER_VERSION, InMemoryScreeningStore, ResultSnapshotUnavailable, StoredOperation,
 )
@@ -129,7 +129,7 @@ def build_mock_screening() -> MockScreening:
         storage = PostgresScreeningStore(connect_screening)
         storage.publish(path, disclaimer_version=DEMO_DISCLAIMER_VERSION, disclaimer=DEMO_DISCLAIMER)
     elif backend == 'memory':
-        rules = RuleRegistry()
+        rules = LocalRegistry()
         rules.publish(path)
         storage = InMemoryScreeningStore(rules)
     else:
