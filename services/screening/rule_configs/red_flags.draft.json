@@ -1,0 +1,123 @@
+{
+  "source": {
+    "document": "MIS 24 - Опросник json",
+    "config_version": "1.0.0-draft",
+    "section": "red_flags.items",
+    "pages": [9, 10]
+  },
+  "status": "pending_curator_approval",
+  "block": {
+    "code": "В",
+    "questions": [
+      {
+        "code": "rf_pulmonary_hemorrhage",
+        "type": "boolean",
+        "text": "Кровохарканье, острая гипоксемия с двусторонними инфильтратами, лёгочно-почечный синдром",
+        "required": false
+      },
+      {
+        "code": "rf_rapidly_progressive_glomerulonephritis",
+        "type": "boolean",
+        "text": "Активный мочевой осадок (гематурия, цилиндры), быстрое нарастание креатинина, протеинурия >0,5 г/24 ч",
+        "required": false
+      },
+      {
+        "code": "rf_neurological_catastrophe",
+        "type": "boolean",
+        "text": "Внезапная потеря зрения, синдром конского хвоста, множественная мононевропатия",
+        "required": false
+      },
+      {
+        "code": "rf_critical_digital_ischemia",
+        "type": "boolean",
+        "text": "Язвы/некроз кончиков пальцев, критическая ишемия",
+        "required": false
+      },
+      {
+        "code": "rf_fever_cytopenia",
+        "type": "boolean",
+        "text": "Лихорадка + цитопении (лейкопения, тромбоцитопения), быстрое полиорганное ухудшение",
+        "required": false
+      },
+      {
+        "code": "rf_gca_visual_loss",
+        "type": "boolean",
+        "text": "Вновь возникшая головная боль у пациента ≥50 лет, челюстная хромота, болезненность височной артерии, СОЭ >50 мм/ч, внезапное снижение зрения",
+        "required": false
+      },
+      {
+        "code": "rf_vasculitis_purpura_gi",
+        "type": "boolean",
+        "text": "Пурпура + гипертензия + абдоминальная боль (подозрение на IgA-васкулит с поражением ЖКТ/почек)",
+        "required": false
+      }
+    ]
+  },
+  "red_flags": [
+    {
+      "code": "rf_pulmonary_hemorrhage",
+      "when": {"question_code": "rf_pulmonary_hemorrhage", "option_code": "yes"},
+      "recommendation_codes": ["rf_pulmonary_hemorrhage"]
+    },
+    {
+      "code": "rf_rapidly_progressive_glomerulonephritis",
+      "when": {"question_code": "rf_rapidly_progressive_glomerulonephritis", "option_code": "yes"},
+      "recommendation_codes": ["rf_rapidly_progressive_glomerulonephritis"]
+    },
+    {
+      "code": "rf_neurological_catastrophe",
+      "when": {"question_code": "rf_neurological_catastrophe", "option_code": "yes"},
+      "recommendation_codes": ["rf_neurological_catastrophe"]
+    },
+    {
+      "code": "rf_critical_digital_ischemia",
+      "when": {"question_code": "rf_critical_digital_ischemia", "option_code": "yes"},
+      "recommendation_codes": ["rf_critical_digital_ischemia"]
+    },
+    {
+      "code": "rf_fever_cytopenia",
+      "when": {"question_code": "rf_fever_cytopenia", "option_code": "yes"},
+      "recommendation_codes": ["rf_fever_cytopenia"]
+    },
+    {
+      "code": "rf_gca_visual_loss",
+      "when": {"question_code": "rf_gca_visual_loss", "option_code": "yes"},
+      "recommendation_codes": ["rf_gca_visual_loss"]
+    },
+    {
+      "code": "rf_vasculitis_purpura_gi",
+      "when": {"question_code": "rf_vasculitis_purpura_gi", "option_code": "yes"},
+      "recommendation_codes": ["rf_vasculitis_purpura_gi"]
+    }
+  ],
+  "recommendations": [
+    {
+      "code": "rf_pulmonary_hemorrhage",
+      "text": "Немедленная госпитализация; исключить диффузное альвеолярное кровотечение (СКВ/васкулит)."
+    },
+    {
+      "code": "rf_rapidly_progressive_glomerulonephritis",
+      "text": "Срочная консультация нефролога/ревматолога в течение 24 ч; исключить волчаночный нефрит или ANCA-васкулит."
+    },
+    {
+      "code": "rf_neurological_catastrophe",
+      "text": "Экстренная госпитализация / нейрохирургическая консультация."
+    },
+    {
+      "code": "rf_critical_digital_ischemia",
+      "text": "Срочная госпитализация (риск потери конечности)."
+    },
+    {
+      "code": "rf_fever_cytopenia",
+      "text": "Исключить гемофагоцитарный синдром / катастрофический АФС; экстренная госпитализация."
+    },
+    {
+      "code": "rf_gca_visual_loss",
+      "text": "Немедленно начать ГКС и направить к офтальмологу/ревматологу (риск необратимой слепоты)."
+    },
+    {
+      "code": "rf_vasculitis_purpura_gi",
+      "text": "Срочная госпитализация."
+    }
+  ]
+}

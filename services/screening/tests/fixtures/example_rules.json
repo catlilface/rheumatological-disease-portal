@@ -1,0 +1,76 @@
+{
+  "id": "example",
+  "weights_version": "v1",
+  "blocks": [
+    {
+      "code": "A",
+      "questions": [
+        {
+          "code": "A1",
+          "type": "single_choice",
+          "text": "Тестовый вопрос А",
+          "required": true,
+          "options": [
+            {"value": "zero", "label": "Ноль", "weight": 0},
+            {"value": "four", "label": "Четыре", "weight": 4},
+            {"value": "five", "label": "Пять", "weight": 5},
+            {"value": "nine", "label": "Девять", "weight": 9}
+          ]
+        }
+      ]
+    },
+    {
+      "code": "Б",
+      "questions": [
+        {
+          "code": "Б1",
+          "type": "boolean",
+          "text": "Тестовый вопрос Б",
+          "required": false,
+          "weights": {"yes": 7, "no": 0}
+        }
+      ]
+    },
+    {
+      "code": "В",
+      "questions": [
+        {
+          "code": "В1",
+          "type": "boolean",
+          "text": "Тестовый красный флаг",
+          "required": true
+        }
+      ]
+    },
+    {
+      "code": "Г",
+      "questions": [
+        {
+          "code": "Г1",
+          "type": "boolean",
+          "text": "Тестовый вопрос Г",
+          "required": true,
+          "weights": {"yes": 3, "no": 0}
+        }
+      ]
+    }
+  ],
+  "scoring": {
+    "sum_blocks": ["A", "Б", "Г"],
+    "thresholds": {"low": [0, 4], "medium": [5, 10], "high": [11, null]},
+    "outcome_recommendations": {"low": ["low"], "medium": ["medium"], "high": ["high"]},
+    "red_flags": [
+      {
+        "code": "example_flag",
+        "when": {"question_code": "В1", "option_code": "yes"},
+        "recommendation_codes": ["urgent"]
+      }
+    ]
+  },
+  "recommendations": [
+    {"code": "low", "text": "Тестовое сообщение для низкого уровня."},
+    {"code": "medium", "text": "Тестовое сообщение для среднего уровня."},
+    {"code": "high", "text": "Тестовое сообщение для высокого уровня."},
+    {"code": "urgent", "text": "Тестовое сообщение для красного флага."}
+  ]
+}
