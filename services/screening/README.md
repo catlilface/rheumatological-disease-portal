@@ -114,7 +114,7 @@ print(result.level, result.total_score, result.matched_range)
 На отдельном локальном стенде с подготовленным окружением Compose включите
 обработчик команд при запуске Screening.
 
-```powershell
+```bash
 make migrate
 docker compose run --build --rm -e SCREENING_MOCK=1 screening
 ```
@@ -126,7 +126,7 @@ docker compose run --build --rm -e SCREENING_MOCK=1 screening
 `example/v1` с дисклеймером `demo-v1`. Подключение использует `PGHOST`
 и пароль роли `mis_screening_app` из секрета Compose.
 
-```powershell
+```bash
 make migrate
 docker compose run --build --rm -e SCREENING_MOCK=1 -e SCREENING_STORAGE=postgres screening
 ```
@@ -161,29 +161,28 @@ docker compose run --build --rm -e SCREENING_MOCK=1 -e SCREENING_STORAGE=postgre
 Загрузчик и чистый расчёт используют стандартную библиотеку Python. Для
 полного набора нужны зависимости из существующего
 [`service-runtime/uv.lock`](../../packages/service-runtime/uv.lock) и сгенерированные
-модули Protobuf. Команды PowerShell выполняются из корня репозитория. Для
+модули Protobuf. Команды Bash выполняются из корня репозитория. Для
 установки `uv` при необходимости используйте `python -m pip install uv`.
 
-```powershell
+```bash
 uv sync --project packages/service-runtime --locked --no-install-project
-$screeningPython = (Resolve-Path 'packages/service-runtime/.venv/Scripts/python.exe').Path
-$screeningProto = Join-Path ([System.IO.Path]::GetTempPath()) 'rdp-screening-proto'
-New-Item -ItemType Directory -Force -Path $screeningProto | Out-Null
-& $screeningPython -c "from pathlib import Path; import subprocess, sys; subprocess.run([sys.executable, '-m', 'grpc_tools.protoc', '-I.', '--python_out='+sys.argv[1], '--grpc_python_out='+sys.argv[1], *(path.as_posix() for path in Path('contracts').glob('*/v1/*.proto'))], check=True)" $screeningProto
-$env:PYTHONPATH = "$screeningProto;$(Resolve-Path 'packages/service-runtime')"
-$env:PYTHONUTF8 = '1'
-& $screeningPython -m unittest discover -s services/screening/tests -v
+screening_python="$PWD/packages/service-runtime/.venv/bin/python"
+screening_proto="$(mktemp -d)"
+"$screening_python" -m grpc_tools.protoc -I. \
+  --python_out="$screening_proto" --grpc_python_out="$screening_proto" \
+  contracts/*/v1/*.proto
+PYTHONPATH="$screening_proto:$PWD/packages/service-runtime${PYTHONPATH:+:$PYTHONPATH}" \
+  PYTHONUTF8=1 "$screening_python" -m unittest discover -s services/screening/tests -v
 ```
 
 Эта команда запускает тесты мока и пропускает интеграционные тесты
 PostgreSQL. Транспортный тест использует gRPC на локальном порту,
 выделенном системой. Для регрессии BFF выполните команды из
-[README BFF](../bff/README.md). Для pytest на Windows оставьте
-установленным `PYTHONUTF8=1`.
+[README BFF](../bff/README.md).
 
 Для полного прогона с Docker выполните из корня:
 
-```powershell
+```bash
 uv run --project packages/service-runtime --locked --no-install-project python services/screening/tests/run_postgres.py
 ```
 
@@ -195,7 +194,7 @@ PostgreSQL на localhost, применяет SQL миграций и запус
 
 Для отдельных проверок формата и чистого расчёта достаточно системного Python.
 
-```powershell
+```bash
 python -m unittest discover -s services/screening/tests -p test_rules.py -v
 python -m unittest discover -s services/screening/tests -p test_scoring.py -v
 ```
