@@ -23,3 +23,7 @@ test-infra:
 
 test-kind:
 	bash infra/kind/check.sh
+
+.PHONY: test-bff-kafka
+test-bff-kafka:
+	bash infra/db/test-bff-kafka.sh
