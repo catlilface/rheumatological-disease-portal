@@ -25,9 +25,17 @@ CREATE TABLE kafka_outbox (
     entity_key text NOT NULL,
     payload bytea NOT NULL,
     metadata bytea,
-    published_at timestamptz
+    published_at timestamptz,
+    quarantined_at timestamptz,
+    publish_error integer,
+    CONSTRAINT kafka_outbox_quarantine_state CHECK (
+        (quarantined_at IS NULL AND publish_error IS NULL)
+        OR (quarantined_at IS NOT NULL AND publish_error IS NOT NULL AND published_at IS NULL)
+    )
 );
 CREATE INDEX kafka_outbox_pending ON kafka_outbox (position) WHERE published_at IS NULL;
+CREATE INDEX kafka_outbox_quarantined_key
+    ON kafka_outbox (topic, entity_key, position) WHERE quarantined_at IS NOT NULL;
 
 -- migrate:down
 SET LOCAL search_path = public;
