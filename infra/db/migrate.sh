@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-for owner in iam screening content reporting files ai; do
+for owner in iam screening content reporting files ai ${MIS_EXTRA_DB_OWNER:-}; do
     echo "Migrating mis_$owner"
     PGPASSWORD=$(cat "/credentials/$owner"); export PGPASSWORD
     export DATABASE_URL="postgres://mis_${owner}_migrator@postgres:5432/mis_${owner}?sslmode=disable&search_path=migration"

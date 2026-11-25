@@ -10,7 +10,7 @@ REVOKE CONNECT, TEMP ON DATABASE postgres, template1 FROM PUBLIC;
 SELECT format('REVOKE CONNECT, TEMP ON DATABASE %I FROM PUBLIC', datname)
 FROM pg_database WHERE datname IN ('iam', 'screening', 'content', 'reporting', 'files', 'ai') \gexec
 SQL
-for owner in iam screening content reporting files ai; do
+for owner in iam screening content reporting files ai ${MIS_EXTRA_DB_OWNER:-}; do
     db=mis_$owner; app=${db}_app; migrator=${db}_migrator
     APP_PASSWORD=$(cat "/credentials/apps/$owner"); export APP_PASSWORD
     MIGRATOR_PASSWORD=$(cat "/credentials/migrators/$owner"); export MIGRATOR_PASSWORD

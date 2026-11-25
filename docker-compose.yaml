@@ -45,6 +45,12 @@ services:
     networks:
       - edge
       - rpc
+      - databases
+      - broker
+    environment:
+      PGHOST: postgres
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/bff:/run/secrets/db-password:ro"]
     env_file:
       - .env
     healthcheck:
@@ -99,6 +105,7 @@ services:
   db-bootstrap:
     profiles: [tools]
     image: postgres:18.7-alpine3.23
+    environment: {MIS_EXTRA_DB_OWNER: bff}
     networks: [databases]
     secrets: [postgres-password]
     volumes:
@@ -109,6 +116,7 @@ services:
   db-migrate:
     profiles: [tools]
     image: ghcr.io/amacneil/dbmate:2.38.2
+    environment: {MIS_EXTRA_DB_OWNER: bff}
     networks: [databases]
     entrypoint: [sh, /db/migrate.sh]
     volumes:
@@ -120,6 +128,7 @@ services:
       - ./services/reporting/migrations:/services/reporting/migrations:ro
       - ./services/files/migrations:/services/files/migrations:ro
       - ./services/ai/migrations:/services/ai/migrations:ro
+      - ./services/bff/migrations:/services/bff/migrations:ro
 
   kafka:
     image: apache/kafka:4.4.0
