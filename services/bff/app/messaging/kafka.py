@@ -368,8 +368,8 @@ class KafkaInboxOutbox:
             return {"error": "version_gap"}, False
         cursor.execute("SAVEPOINT kafka_handler")
         try:
-            result = handler(cursor, message)
-            json.dumps(result, allow_nan=False)
+            outcome = {"status": "succeeded", "result": handler(cursor, message)}
+            cursor.execute("SELECT %s::jsonb", (json.dumps(outcome, allow_nan=False),))
         except RejectMessage:
             cursor.execute("ROLLBACK TO SAVEPOINT kafka_handler")
             return {"error": "rejected"}, False
@@ -382,4 +382,4 @@ class KafkaInboxOutbox:
             "ON CONFLICT (kind, entity_key) DO UPDATE SET version = excluded.version",
             (metadata.kind, metadata.key, metadata.version),
         )
-        return {"status": "succeeded", "result": result}, False
+        return outcome, False

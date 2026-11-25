@@ -206,6 +206,34 @@ def test_conflicts_versions_and_poison_message(stack):
     assert codes == {"idempotency_conflict": 1, "version_gap": 1, "handler_failed": 1, "invalid_message": 2}
 
 
+@pytest.mark.parametrize("invalid_value", ["\x00", "\ud800"], ids=["nul", "unpaired-surrogate"])
+def test_jsonb_rejects_outcome_without_blocking_next_command(stack, invalid_value):
+    worker, consumer, query, commands, events, dead = stack
+    transport = worker(max_attempts=2)
+    first = Metadata(uuid4(), uuid4(), "counter", uuid4(), 1, "command")
+    following = replace(first, id=uuid4(), operation_id=uuid4())
+    transport.submit(Message(commands, first, b"invalid"))
+    transport.submit(Message(commands, following, b"valid"))
+    drain(transport)
+    apply = example_handler(events)
+
+    def handle(cursor, message):
+        result = apply(cursor, message)
+        if message.payload == b"invalid":
+            return {"value": invalid_value}
+        return result
+
+    with closing(consumer(uuid4().hex, commands)) as incoming:
+        read_one(transport, incoming, handle)
+        assert query("SELECT value FROM demo_counter") == []
+        assert query("SELECT attempts FROM kafka_operations WHERE outcome->>'error' = 'handler_failed'") == [(2,)]
+        read_one(transport, incoming, handle)
+
+    assert transport.operation(first.operation_id) == {"error": "handler_failed"}
+    assert transport.operation(following.operation_id) == {"status": "succeeded", "result": {"value": 1}}
+    assert query("SELECT topic FROM kafka_outbox WHERE published_at IS NULL ORDER BY position") == [(dead,), (events,)]
+
+
 def test_publish_failure_leaves_event_for_restart(stack):
     worker, consumer, query, _, events, _ = stack
     transport = worker()
