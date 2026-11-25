@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from confluent_kafka import Consumer, KafkaException, Producer
+from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 from pg8000.dbapi import Connection, Cursor, connect
 
 
@@ -72,6 +72,13 @@ class RejectMessage(Exception):
 
 Handler = Callable[[Cursor, Message], dict]
 _HEADER = "mis-delivery"
+_PERMANENT_PUBLISH_ERRORS = {
+    KafkaError.INVALID_MSG,
+    KafkaError.INVALID_MSG_SIZE,
+    KafkaError.MSG_SIZE_TOO_LARGE,
+    KafkaError.TOPIC_AUTHORIZATION_FAILED,
+    KafkaError.TOPIC_EXCEPTION,
+}
 
 
 def _validate_topic(topic: str):
@@ -190,29 +197,47 @@ class KafkaInboxOutbox:
         with self._transaction() as cursor:
             self._lock(cursor, "kafka:publish")
             cursor.execute(
-                "SELECT id, topic, entity_key, payload, metadata FROM public.kafka_outbox "
-                "WHERE published_at IS NULL ORDER BY position LIMIT 1"
+                "SELECT id, topic, entity_key, payload, metadata FROM public.kafka_outbox AS pending "
+                "WHERE pending.published_at IS NULL AND pending.quarantined_at IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM public.kafka_outbox AS blocked "
+                "WHERE blocked.quarantined_at IS NOT NULL AND blocked.topic = pending.topic "
+                "AND blocked.entity_key = pending.entity_key AND blocked.position < pending.position) "
+                "ORDER BY pending.position LIMIT 1"
             )
             row = cursor.fetchone()
             if row is None:
                 return False
             identifier, topic, key, payload, metadata = row
-            reports = []
-            headers = [(_HEADER, metadata)] if metadata is not None else []
-            self.producer.produce(
-                topic, key=key, value=payload, headers=headers,
-                on_delivery=lambda error, _: reports.append(error),
-            )
-            self.producer.flush(self.publish_timeout)
-            if not reports:
-                raise TimeoutError("Kafka delivery confirmation timed out")
-            if reports[0] is not None:
-                raise KafkaException(reports[0])
+            try:
+                self._send(topic, key, payload, metadata)
+            except KafkaException as exc:
+                error = exc.args[0]
+                if error.code() not in _PERMANENT_PUBLISH_ERRORS:
+                    raise
+                cursor.execute(
+                    "UPDATE public.kafka_outbox SET quarantined_at = clock_timestamp(), "
+                    "publish_error = %s WHERE id = %s",
+                    (error.code(), identifier),
+                )
+                return True
             cursor.execute(
                 "UPDATE public.kafka_outbox SET published_at = clock_timestamp() WHERE id = %s",
                 (identifier,),
             )
             return True
+
+    def _send(self, topic, key, payload, metadata):
+        reports = []
+        headers = [(_HEADER, metadata)] if metadata is not None else []
+        self.producer.produce(
+            topic, key=key, value=payload, headers=headers,
+            on_delivery=lambda error, _: reports.append(error),
+        )
+        self.producer.flush(self.publish_timeout)
+        if not reports:
+            raise TimeoutError("Kafka delivery confirmation timed out")
+        if reports[0] is not None:
+            raise KafkaException(reports[0])
 
     def consume_one(self, consumer: Consumer, handler: Handler, timeout: float = 1) -> bool:
         try:

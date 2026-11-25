@@ -75,6 +75,10 @@ jobs:
         working-directory: services/bff
         run: uv run --locked pytest -q
 
+      - name: Test BFF inbox and outbox with Kafka and PostgreSQL
+        if: matrix.service == 'bff'
+        run: make test-bff-kafka
+
       - name: Build BFF image
         if: matrix.service == 'bff'
         run: docker build -f services/bff/Dockerfile -t "rheumatology-portal-$SERVICE:ci" .
