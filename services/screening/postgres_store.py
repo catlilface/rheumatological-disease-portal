@@ -14,20 +14,12 @@ from uuid import UUID
 from contracts.events.v1.screening_pb2 import ScreeningEvent
 from pg8000.dbapi import Connection, connect
 
-if __package__:
-    from .rules import RuleConfigError, load_rules, validate_rules
-    from .scoring import Recommendation, RedFlagMatch, ScoredAnswer, ScreeningCalculation
-    from .storage import (
-        OperationReservation, QuestionnaireVersion, ResultSnapshotUnavailable,
-        SavedAnswer, ScreeningStore, StoredOperation, StoredResult, StoredSession,
-    )
-else:
-    from rules import RuleConfigError, load_rules, validate_rules
-    from scoring import Recommendation, RedFlagMatch, ScoredAnswer, ScreeningCalculation
-    from storage import (
-        OperationReservation, QuestionnaireVersion, ResultSnapshotUnavailable,
-        SavedAnswer, ScreeningStore, StoredOperation, StoredResult, StoredSession,
-    )
+from .rules import RuleConfigError, load_rules, validate_rules
+from .scoring import Recommendation, RedFlagMatch, ScoredAnswer, ScreeningCalculation
+from .storage import (
+    OperationReservation, QuestionnaireVersion, ResultSnapshotUnavailable,
+    SavedAnswer, ScreeningStore, StoredOperation, StoredResult, StoredSession,
+)
 
 
 def connect_screening() -> Connection:

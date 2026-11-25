@@ -12,18 +12,11 @@ from contracts.common.v1 import metadata_pb2 as metadata
 from contracts.common.v1 import screening_pb2 as screening
 from contracts.events.v1.screening_pb2 import ScreeningEvent
 
-if __package__:
-    from .scoring import AnswerError, ScreeningCalculation, calculate_result
-    from .storage import (
-        OperationReservation, ResultSnapshotUnavailable, SavedAnswer, ScreeningStore, ScreeningTransaction,
-        StoredOperation, StoredResult, StoredSession,
-    )
-else:
-    from scoring import AnswerError, ScreeningCalculation, calculate_result
-    from storage import (
-        OperationReservation, ResultSnapshotUnavailable, SavedAnswer, ScreeningStore, ScreeningTransaction,
-        StoredOperation, StoredResult, StoredSession,
-    )
+from .scoring import AnswerError, ScreeningCalculation, calculate_result
+from .storage import (
+    OperationReservation, ResultSnapshotUnavailable, SavedAnswer, ScreeningStore, ScreeningTransaction,
+    StoredOperation, StoredResult, StoredSession,
+)
 
 
 LEVELS = {

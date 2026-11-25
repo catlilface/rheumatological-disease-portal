@@ -10,24 +10,14 @@ from contracts.common.v1.screening_pb2 import Survey
 from contracts.grpc.v1 import screening_pb2_grpc as rpc
 from runtime import reply, serve
 
-if __package__:
-    from .postgres_store import PostgresScreeningStore, connect_screening
-    from .rules import RuleRegistry
-    from .storage import (
-        DEMO_DISCLAIMER, DEMO_DISCLAIMER_VERSION, InMemoryScreeningStore, ResultSnapshotUnavailable, StoredOperation,
-    )
-    from .workflow import (
-        InvalidCommand, ScreeningWorkflow, result_message, session_message,
-    )
-else:
-    from postgres_store import PostgresScreeningStore, connect_screening
-    from rules import RuleRegistry
-    from storage import (
-        DEMO_DISCLAIMER, DEMO_DISCLAIMER_VERSION, InMemoryScreeningStore, ResultSnapshotUnavailable, StoredOperation,
-    )
-    from workflow import (
-        InvalidCommand, ScreeningWorkflow, result_message, session_message,
-    )
+from .postgres_store import PostgresScreeningStore, connect_screening
+from .rules import RuleRegistry
+from .storage import (
+    DEMO_DISCLAIMER, DEMO_DISCLAIMER_VERSION, InMemoryScreeningStore, ResultSnapshotUnavailable, StoredOperation,
+)
+from .workflow import (
+    InvalidCommand, ScreeningWorkflow, result_message, session_message,
+)
 
 
 def survey_message(data, disclaimer=DEMO_DISCLAIMER, disclaimer_version=DEMO_DISCLAIMER_VERSION):
