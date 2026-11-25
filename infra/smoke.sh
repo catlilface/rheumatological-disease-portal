@@ -9,8 +9,7 @@ case $mode in
  compose)
    dc=(docker compose)
    run() { "${dc[@]}" exec -T "$@"; }
-   vecnet=$(docker inspect -f '{{range $key,$val := .NetworkSettings.Networks}}{{$key}}{{end}}' "$("${dc[@]}" ps -q qdrant)")
-   vector() { docker run --rm -i --network "$vecnet" rdp-bff:mvp python - "$@"; }
+   vector() { run ai python - "$@"; }
    ;;
  k8s)
    : "${KUBECONFIG:?Set an explicit kubeconfig for the disposable test cluster}"

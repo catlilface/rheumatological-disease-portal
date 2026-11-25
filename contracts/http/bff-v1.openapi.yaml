@@ -1,0 +1,944 @@
+openapi: 3.1.0
+info:
+  title: Ревматологический портал
+  version: 1.0.0-draft
+  description: |
+    Проект контракта для фронтенда. Ответы — JSON (snake_case) или PDF, транспорт — HTTPS.
+    По умолчанию требуется действующая сессия. Для скрининга достаточно гостевой;
+    /me и запись на форуме требуют регистрации; /moderation — права модератора.
+    Для чужого частного ресурса возвращается 404. Для медицинских данных ЛК требуется
+    действующее согласие. Данные, секреты и статусы операций не кешируются (no-store).
+    В разделе Responses каждой операции указаны её HTTP-коды. У ошибки JSON есть `code`, `message` и `request_id`.
+    Исключение — отказ до маршрутизации: недоверенный `Host` или запрещённый CORS-preflight (`OPTIONS`) даёт `400 text/plain`.
+    Для POST, PUT и DELETE тело, которое не удалось прочитать (в том числе больше 1 МиБ), даёт `422 VALIDATION_ERROR`.
+    `202` подтверждает приём команды, а не её выполнение: читайте `status_url`. При `state=rejected` или `failed`
+    причина находится в `error.code` ответа `200`, а не в HTTP-статусе исходной команды.
+    Ограничение частоты (`429`) в демостенде не настроено. Ответы `503` от зависимых сервисов предусмотрены контрактом, но не имитируются.
+    Регистрация, управление сессиями и отзыв согласия подтверждаются синхронно.
+servers: [{url: /api/v1}]
+security: [{session: []}]
+tags:
+  - name: Сессии и согласие
+  - name: Статусы операций
+  - name: Анкета и скрининг
+  - name: Результаты и пояснения
+  - name: База знаний
+  - name: Кабинет и дневник
+  - name: Препараты и приёмы
+  - name: Напоминания и уведомления
+  - name: Отчёты и доступ врача
+  - name: Форум
+  - name: Модерация
+components:
+  securitySchemes:
+    session: {type: apiKey, in: cookie, name: portal_session, description: HttpOnly; Secure; SameSite=Lax. Не передаётся в JSON.}
+    refresh: {type: apiKey, in: cookie, name: portal_refresh, description: Ротируемая HttpOnly cookie; Secure; SameSite=Strict; Path=/api/v1/auth/session.}
+  parameters:
+    BrowserRequest: {in: header, name: X-Portal-Request, required: true, description: Проверяется вместе с допустимым Origin; непростой CORS-запрос, schema: {type: string, const: '1'}}
+    Key: {in: header, name: Idempotency-Key, required: true, description: Новый случайный ключ для одного намерения; тот же при транспортном повторе, schema: {type: string, format: uuid}}
+    Limit: {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    Offset: {in: query, name: offset, schema: {type: integer, minimum: 0, default: 0}}
+    From: {in: query, name: from_date, schema: {type: string, format: date}, description: Нижняя граница включительно}
+    To: {in: query, name: to_date, schema: {type: string, format: date}, description: Верхняя граница включительно}
+  responses:
+    Accepted: &accepted
+      description: Команда принята. Проверьте результат по `status_url`.
+      headers: &receiptHeaders
+        Location: {required: true, schema: {type: string, format: uri-reference}, description: Совпадает с status_url}
+        Retry-After: {schema: {type: integer, minimum: 1}, description: Рекомендуемая задержка опроса в секундах}
+      content: &receiptBody {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Accepted'}}}
+    Error:
+      description: Ошибка BFF. Для программной обработки используйте `code`.
+      content: &errorBody {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Error'}}}
+    InvalidHost: &host400
+      description: Заголовок `Host` не входит в список разрешённых. Запрос отклонён до вызова обработчика.
+      content: {text/plain: &plainText {schema: {type: string}, example: Invalid host header}}
+    BadWriteRequest: &write400
+      description: Если передано тело, оно должно быть корректным JSON в UTF-8 (`INVALID_JSON`). При недоверенном `Host` вместо JSON возвращается обычный текст.
+      content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Error'}}, text/plain: *plainText}
+    SessionRequired: &session401
+      description: Сессионная cookie `portal_session` отсутствует, недействительна или истекла (`SESSION_REQUIRED`).
+      content: *errorBody
+    BrowserDenied: &browser403
+      description: Проверка браузерного запроса не пройдена (`BROWSER_REQUEST_DENIED`). Нужны доверенный `Origin` и заголовок `X-Portal-Request` со значением `1`.
+      content: *errorBody
+    PatientRequired: &patient403
+      description: Для гостя требуется регистрация (`REGISTRATION_REQUIRED`). Данные доступны только пациенту с действующим согласием (`CONSENT_REQUIRED`).
+      content: *errorBody
+    PatientWriteDenied: &patientWrite403
+      description: Нет доверенного `Origin` или `X-Portal-Request` не равен `1` (`BROWSER_REQUEST_DENIED`); запрос отправил гость (`REGISTRATION_REQUIRED`) или нет учётной записи пациента с действующим согласием (`CONSENT_REQUIRED`).
+      content: *errorBody
+    ForumWriteDenied: &forum403
+      description: Гость не может отправлять сообщения или жалобы (`REGISTRATION_REQUIRED`). Для записи также нужны доверенный `Origin` и `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`).
+      content: *errorBody
+    IntentConflict: &key409
+      description: Этот пользователь уже передал тот же `Idempotency-Key` для другого метода, пути или тела (`IDEMPOTENCY_KEY_REUSED`). Повторяйте исходный запрос без изменений; для нового действия нужен новый ключ.
+      content: *errorBody
+    InvalidKey: &key422
+      description: Заголовок `Idempotency-Key` отсутствует или не содержит UUID (`VALIDATION_ERROR`). Тело не требуется; если оно отправлено, лимит — 1 МиБ.
+      content: *errorBody
+    InvalidPagination: &page422
+      description: Параметры пагинации должны быть целыми числами (`VALIDATION_ERROR`), `limit` от 1 до 100, `offset` не меньше 0.
+      content: *errorBody
+    InternalError: &internal500
+      description: BFF не смог обработать запрос из-за непредвиденной внутренней ошибки (`INTERNAL_ERROR`). При обращении в поддержку укажите `request_id`.
+      content: *errorBody
+    CommandUnavailable: &command503
+      description: Сервис временно не может принять команду (предусмотрено контрактом, не имитируется стендом). Для повтора используйте тот же `Idempotency-Key`.
+      content: *errorBody
+    FileUnavailable: &file503
+      description: Сервис файлов временно не может выдать PDF (предусмотрено контрактом, не имитируется стендом). Повторите скачивание позже.
+      content: *errorBody
+    Principal: {description: Сеанс без секретов, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Principal'}}}}
+    SessionCreated:
+      description: Данные сессии; токены передаются только отдельными Set-Cookie
+      headers: {Set-Cookie: {schema: {type: string}, description: Защищённые cookie с ограниченным сроком}}
+      content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Principal'}}}
+    Pdf:
+      description: Байты готового PDF-документа
+      headers:
+        Content-Disposition: {required: true, schema: {type: string, example: 'attachment; filename="report.pdf"'}}
+        Cache-Control: {required: true, schema: {type: string, const: no-store}}
+      content: {application/pdf: {schema: {type: string, format: binary}}}
+paths:
+  /auth/guest-sessions:
+    post:
+      tags: [Сессии и согласие]
+      operationId: createGuestSession
+      summary: Начать гостевую сессию
+      description: Устанавливает cookie гостя. С этой сессией можно пройти скрининг и скачать отчёт без регистрации.
+      security: []
+      parameters: [&csrf {$ref: '#/components/parameters/BrowserRequest'}, &key {$ref: '#/components/parameters/Key'}]
+      responses:
+        '201': {$ref: '#/components/responses/SessionCreated'}
+        '400': *write400
+        '401': {description: 'При повторе с тем же ключом ранее выданная сессия уже недействительна (`SESSION_REQUIRED`). Для первого запроса сессия не нужна.', content: *errorBody}
+        '403': *browser403
+        '409': {description: 'По этому ключу уже выдана гостевая сессия, но при повторе нет соответствующей cookie (`GUEST_SESSION_ALREADY_ISSUED`).', content: *errorBody}
+        '422': *key422
+        '500': *internal500
+  /auth/medical-data-policy:
+    get:
+      tags: [Сессии и согласие]
+      operationId: getMedicalDataPolicy
+      summary: Прочитать согласие
+      description: Возвращает действующий текст согласия на обработку медицинских данных и ссылку на документ. При регистрации передайте версию, которую принял пациент.
+      security: []
+      responses:
+        '200': {description: Действующая редакция, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Policy'}}}}
+        '400': *host400
+        '500': *internal500
+  /auth/registrations:
+    post:
+      tags: [Сессии и согласие]
+      operationId: registerPatient
+      summary: Зарегистрироваться
+      description: Создаёт учётную запись пациента и открывает сессию. Требуется явное согласие на действующую редакцию правил обработки медицинских данных; подтверждение из анкеты его не заменяет.
+      security: []
+      parameters: [*csrf, *key]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Registration'}}}}
+      responses:
+        '201': {$ref: '#/components/responses/SessionCreated'}
+        '400': *write400
+        '401': {description: 'При повторной регистрации с тем же ключом исходная сессия уже закрыта или истекла (`SESSION_REQUIRED`). Используйте обычный вход.', content: *errorBody}
+        '403': *browser403
+        '409': {description: 'Адрес уже занят (`ACCOUNT_ALREADY_EXISTS`) или с тем же ключом переданы другие учётные данные (`IDEMPOTENCY_KEY_REUSED`).', content: *errorBody}
+        '422': {description: 'Невалидны email, пароль, UUID ключа или подтверждение согласия (`VALIDATION_ERROR`). Если предъявлена устаревшая версия согласия — `CONSENT_VERSION_MISMATCH`; покажите текущий текст перед повтором.', content: *errorBody}
+        '500': *internal500
+  /auth/session:
+    get:
+      tags: [Сессии и согласие]
+      operationId: getPrincipal
+      summary: Проверить сессию
+      description: Возвращает тип пользователя, его роли и время окончания текущей сессии. Если действующей сессии нет, сервер отвечает `401`.
+      responses:
+        '200': {$ref: '#/components/responses/Principal'}
+        '400': *host400
+        '401': *session401
+        '500': *internal500
+    post:
+      tags: [Сессии и согласие]
+      operationId: signIn
+      summary: Войти
+      description: Проверяет адрес электронной почты и пароль и устанавливает новые cookie сессии. При неверных данных возвращает `401`.
+      security: []
+      parameters: [*csrf]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Credentials'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/SessionCreated'}
+        '400': *write400
+        '401': {description: 'Email или пароль не подошёл (`INVALID_CREDENTIALS`). Ответ не раскрывает, существует ли учётная запись.', content: *errorBody}
+        '403': *browser403
+        '422': {description: 'Тело не соответствует схеме входа (`VALIDATION_ERROR`), например отсутствует пароль или неверен формат email.', content: *errorBody}
+        '500': *internal500
+    delete:
+      tags: [Сессии и согласие]
+      operationId: signOut
+      summary: Выйти
+      description: Закрывает текущую сессию и удаляет из браузера обе cookie — для доступа и для обновления сессии.
+      parameters: [*csrf]
+      responses:
+        '204': {description: Сессия закрыта; Set-Cookie очищает cookie}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '422': &unexpectedBody422 {description: 'Тело не требуется. Если оно отправлено, но превышает 1 МиБ или не может быть прочитано, возвращается `VALIDATION_ERROR`.', content: *errorBody}
+        '500': *internal500
+  /auth/session/refresh:
+    post:
+      tags: [Сессии и согласие]
+      operationId: refreshSession
+      summary: Обновить сессию
+      description: Использует защищённую cookie `portal_refresh` и заменяет обе cookie сессии. Повторно вводить пароль не нужно.
+      security: [{refresh: []}]
+      parameters: [*csrf, *key]
+      responses:
+        '200': {$ref: '#/components/responses/SessionCreated'}
+        '400': *write400
+        '401': {description: 'Нет действующей `portal_refresh`: cookie не передана, истекла или уже заменена. При повторе с тем же ключом обновлённая сессия также должна оставаться действующей (`SESSION_REQUIRED`).', content: *errorBody}
+        '403': *browser403
+        '422': *key422
+        '500': *internal500
+  /me/medical-data-consent:
+    delete:
+      tags: [Сессии и согласие]
+      operationId: withdrawMedicalConsent
+      summary: Отозвать согласие
+      description: Отзыв согласия на обработку медицинских данных закрывает доступ к медицинским данным кабинета и врачебным отчётам, в том числе по ранее выданным ссылкам.
+      parameters: [*csrf]
+      responses:
+        '204': {description: Отзыв зафиксирован}
+        '400': *write400
+        '401': *session401
+        '403': {description: 'Нет доверенного `Origin` или заголовка `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`). Гость получает `REGISTRATION_REQUIRED`, а служебная учётная запись — `PATIENT_REQUIRED`: отозвать согласие может только пациент.', content: *errorBody}
+        '422': *unexpectedBody422
+        '500': *internal500
+  /operations/{owner}/{operation_id}:
+    parameters:
+      - {in: path, name: owner, required: true, schema: {enum: [screening, reporting, files, ai, cabinet, community]}}
+      - {in: path, name: operation_id, required: true, schema: &id {$ref: 'schemas.yaml#/$defs/Id'}}
+    get:
+      tags: [Статусы операций]
+      operationId: getOperation
+      summary: Проверить статус операции
+      description: Перейдите по `status_url` из ответа `202` в сессии инициатора. При успехе поле `resources` указывает на затронутые ресурсы, при отказе или сбое поле `error` содержит причину.
+      responses:
+        '200': {description: 'Статус прочитан. Даже при `rejected` или `failed` это успешное чтение: причину отказа смотрите в `error.code`.', content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Operation'}}}}
+        '400': *host400
+        '401': *session401
+        '403': {description: 'Для чтения статуса операции кабинета (`owner=cabinet`) нет действующего согласия (`CONSENT_REQUIRED`).', content: *errorBody}
+        '404': {description: 'У инициатора нет операции с таким ID в указанном сервисе (`NOT_FOUND`). Используйте `status_url` из исходного ответа; чужие операции не видны.', content: *errorBody}
+        '422': {description: 'Неизвестное значение `owner` или `operation_id` не является UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /surveys/{survey_id}:
+    parameters: [{in: path, name: survey_id, required: true, schema: {type: string}}]
+    get:
+      tags: [Анкета и скрининг]
+      operationId: getSurvey
+      summary: Получить анкету
+      description: Возвращает вопросы по порядку, варианты ответов, веса, пороги, правила красных флагов и текст предупреждения. Без `weights_version` возвращается текущая редакция. Чтение анкеты не начинает скрининг.
+      security: []
+      parameters: [{in: query, name: weights_version, schema: {type: string}, description: Точная редакция для возобновления прохождения}]
+      responses:
+        '200': {description: Определение анкеты с дисклеймером и текстом подтверждения, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Survey'}}}}
+        '400': *host400
+        '404': {description: 'Анкета с таким `survey_id` или запрошенная редакция `weights_version` не найдена (`NOT_FOUND`).', content: *errorBody}
+        '500': *internal500
+  /screenings:
+    post:
+      tags: [Анкета и скрининг]
+      operationId: startScreening
+      summary: Начать скрининг
+      description: Создаёт отдельное прохождение для текущего пользователя. Передайте версии анкеты и предупреждения, которые видел пользователь, и его явное подтверждение (`disclaimer_accepted`).
+      parameters: &command [*csrf, *key]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Start'}}}}
+      responses:
+        '202': {description: 'Команда принята. По `status_url` возможен отказ: `SURVEY_NOT_FOUND` — неизвестна анкета или версия весов; `DISCLAIMER_VERSION_MISMATCH` — версия предупреждения изменилась и требуется новое подтверждение.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': {description: 'Отсутствует или неверен UUID ключа, не указаны анкета и её версии либо `disclaimer_accepted` не равно `true` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /screenings/{screening_id}:
+    parameters: [&sid {in: path, name: screening_id, required: true, schema: *id}]
+    get:
+      tags: [Анкета и скрининг]
+      operationId: getScreening
+      summary: Проверить ход скрининга
+      description: Возвращает статус, версию прохождения и сохранённые ответы. Когда появляется результат, поле `result` содержит его идентификатор и версию.
+      responses:
+        '200': {description: Снимок сессии, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Session'}}}}
+        '400': *host400
+        '401': *session401
+        '404': &screening404 {description: 'Прохождение с таким `screening_id` не найдено у текущего пользователя. Для чужого прохождения ответ тот же (`NOT_FOUND`).', content: *errorBody}
+        '422': &screening422 {description: 'Параметр `screening_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /screenings/{screening_id}/answers:
+    parameters: [*sid]
+    post:
+      tags: [Анкета и скрининг]
+      operationId: saveAnswer
+      summary: Сохранить ответ
+      description: Сохраняет ответ на один вопрос или заменяет предыдущий. Передайте версию прохождения, которую редактировал пользователь. При выявлении красного флага результат доступен до завершения анкеты.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Answer'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`. Возможны `NOT_FOUND` (нет своего прохождения или вопроса), `INVALID_ANSWER` (ответ не подходит к вопросу), `CONTINUATION_REQUIRED` (нужно возобновить скрининг), `SESSION_VERSION_CONFLICT` (версия устарела) или `SESSION_CLOSED` (прохождение закрыто).', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': {description: 'Неверен UUID прохождения или ключа; в теле нужны положительная версия, код вопроса и значение — строка либо boolean (`VALIDATION_ERROR`). Соответствие значения конкретному вопросу проверяется после приёма команды.', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /screenings/{screening_id}/continuations:
+    parameters: [*sid]
+    post:
+      tags: [Анкета и скрининг]
+      operationId: continueAfterRedFlag
+      summary: Возобновить скрининг
+      description: Позволяет снова отвечать на вопросы после паузы из-за красного флага. Выявленный флаг остаётся в результате.
+      parameters: *command
+      requestBody: &revision {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Revision'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`: `NOT_INTERRUPTED` — прохождение не на паузе, `SESSION_VERSION_CONFLICT` — версия устарела, `SESSION_CLOSED` — прохождение закрыто, `NOT_FOUND` — нет своего прохождения.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': &revision422 {description: 'Требуются UUID прохождения и ключа идемпотентности, а также целое `expected_session_version` не меньше 1 (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /screenings/{screening_id}/completions:
+    parameters: [*sid]
+    post:
+      tags: [Анкета и скрининг]
+      operationId: completeScreening
+      summary: Завершить скрининг
+      description: Фиксирует итоговую версию результата, когда даны все обязательные ответы. После завершения ответы изменить нельзя.
+      parameters: *command
+      requestBody: *revision
+      responses:
+        '202': {description: 'Проверьте `status_url`: `REQUIRED_ANSWERS_MISSING` — остались обязательные вопросы без ответа, `SESSION_VERSION_CONFLICT` — версия устарела, `SESSION_CLOSED` — прохождение закрыто, `NOT_FOUND` — нет своего прохождения.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': *revision422
+        '500': *internal500
+        '503': *command503
+  /screenings/{screening_id}/abandonments:
+    parameters: [*sid]
+    post:
+      tags: [Анкета и скрининг]
+      operationId: abandonScreening
+      summary: Прекратить скрининг
+      description: Закрывает незавершённое прохождение со статусом `abandoned`. Неполная сумма баллов не становится итоговой оценкой.
+      parameters: *command
+      requestBody: *revision
+      responses:
+        '202': {description: 'Проверьте `status_url`: `SESSION_VERSION_CONFLICT` — версия устарела, `SESSION_CLOSED` — прохождение уже закрыто, `NOT_FOUND` — нет своего прохождения.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': *revision422
+        '500': *internal500
+        '503': *command503
+  /screenings/{screening_id}/results:
+    parameters: [*sid]
+    get:
+      tags: [Результаты и пояснения]
+      operationId: getLatestResult
+      summary: Получить последний результат
+      description: Возвращает последнюю зафиксированную версию результата скрининга, в том числе раннюю при красном флаге. Пока нет ни одной версии, владелец получает `409 RESULT_NOT_READY`.
+      responses:
+        '200': {description: Уровень настороженности с вкладами ответов и рекомендациями, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Result'}}}}
+        '400': *host400
+        '401': *session401
+        '404': *screening404
+        '409': {description: 'Прохождение найдено, но ни одна версия результата ещё не зафиксирована (`RESULT_NOT_READY`).', content: *errorBody}
+        '422': *screening422
+        '500': *internal500
+  /results/{result_id}/versions/{version}:
+    parameters: &resultPath [{in: path, name: result_id, required: true, schema: *id}, {in: path, name: version, required: true, schema: {$ref: 'schemas.yaml#/$defs/Version'}}]
+    get:
+      tags: [Результаты и пояснения]
+      operationId: getExactResult
+      summary: Получить версию результата
+      description: Возвращает неизменяемый результат по паре `result_id` и `version`. Если запрошенной версии нет, сервер отвечает `404`, а не подставляет последнюю.
+      responses:
+        '200': {description: Неизменяемая версия результата, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Result'}}}}
+        '400': *host400
+        '401': *session401
+        '404': {description: 'Результат или запрошенная версия отсутствует либо результат принадлежит другому пользователю (`NOT_FOUND`).', content: *errorBody}
+        '422': &result422 {description: 'Параметр `result_id` должен быть UUID, `version` — целым числом не меньше 1 (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /results/{result_id}/versions/{version}/explanation:
+    parameters: *resultPath
+    post:
+      tags: [Результаты и пояснения]
+      operationId: requestExplanation
+      summary: Запросить пояснение
+      description: Готовит пояснение и список вопросов к врачу для выбранной версии результата. Баллы и сам результат не меняются.
+      parameters: *command
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если указанная версия результата не найдена у инициатора, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *browser403
+        '409': *key409
+        '422': {description: 'Требуются UUID результата, UUID ключа идемпотентности и положительное целое значение `version` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+    get:
+      tags: [Результаты и пояснения]
+      operationId: getExplanation
+      summary: Прочитать пояснение
+      description: Возвращает проверенное пояснение к выбранной версии, вопросы к врачу и источники. Поле `mode` отличает сгенерированный текст от утверждённого резервного. До готовности возвращается `404 EXPLANATION_NOT_READY`.
+      responses:
+        '200': {description: Проверенное пояснение к указанной версии, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Explanation'}}}}
+        '400': *host400
+        '401': *session401
+        '404': {description: 'Результат или версия не найдены у владельца (`NOT_FOUND`) либо версия существует, но пояснение для неё ещё не готово (`EXPLANATION_NOT_READY`).', content: *errorBody}
+        '422': *result422
+        '500': *internal500
+  /knowledge-base/articles:
+    get:
+      tags: [База знаний]
+      operationId: listArticles
+      summary: Найти статьи
+      description: Возвращает опубликованные статьи. Фильтры по заболеванию (`disease_tag`) и разделу (`section`) можно сочетать; `total` учитывает оба фильтра.
+      security: []
+      parameters:
+        - &limit {$ref: '#/components/parameters/Limit'}
+        - &offset {$ref: '#/components/parameters/Offset'}
+        - {in: query, name: disease_tag, schema: {type: string, examples: [RA, GOUT, SLE, SPA]}}
+        - {in: query, name: section, schema: {$ref: 'schemas.yaml#/$defs/Section'}}
+      responses:
+        '200': {description: Список материалов с total после фильтрации, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ArticlePage'}}}}
+        '400': *host400
+        '422': {description: 'Недопустимый раздел `section` или неверная пагинация (`VALIDATION_ERROR`): `limit` должен быть от 1 до 100, `offset` — от 0. Отсутствие статей по фильтрам даёт пустой список, а не ошибку.', content: *errorBody}
+        '500': *internal500
+  /knowledge-base/articles/{slug}:
+    parameters: [{in: path, name: slug, required: true, schema: {type: string}}]
+    get:
+      tags: [База знаний]
+      operationId: getArticle
+      summary: Прочитать статью
+      description: Возвращает опубликованную редакцию по `slug`. В ответе есть текст статьи в Markdown, имя рецензента и источники.
+      security: []
+      responses:
+        '200': {description: Рецензированная редакция, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Article'}}}}
+        '400': *host400
+        '404': {description: 'Опубликованной статьи с таким `slug` нет (`NOT_FOUND`).', content: *errorBody}
+        '500': *internal500
+  /doctor-route:
+    get:
+      tags: [База знаний]
+      operationId: getDoctorRoute
+      summary: Узнать, к какому врачу идти
+      description: Возвращает проверенный рецензентом материал о выборе специалиста и подготовке к приёму. Доступен без регистрации.
+      security: []
+      responses:
+        '200': {description: Опубликованный маршрут и подготовка к приёму, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DoctorRoute'}}}}
+        '400': *host400
+        '500': *internal500
+  /me/onboarding:
+    get:
+      tags: [Кабинет и дневник]
+      operationId: getOnboarding
+      summary: Проверить заполнение профиля
+      description: Возвращает диагноз, препараты и настройки напоминаний пациента. Поле `completed` показывает, завершено ли первичное заполнение.
+      responses:
+        '200': {description: До заполнения completed=false, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Onboarding'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '500': *internal500
+    put:
+      tags: [Кабинет и дневник]
+      operationId: finishOnboarding
+      summary: Завершить настройку профиля
+      description: Сохраняет диагноз, препараты и настройки напоминаний одним запросом. После завершения повторная команда с новым ключом идемпотентности будет отклонена.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/OnboardingInput'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если профиль уже заполнен, новая команда будет отклонена с `ONBOARDING_COMPLETED`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Ключ не является UUID или данные профиля не прошли проверку (`VALIDATION_ERROR`), например дата окончания приёма раньше начала либо часовой пояс не распознан.', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/diary-entries:
+    get:
+      tags: [Кабинет и дневник]
+      operationId: listDiaryEntries
+      summary: Получить записи дневника
+      description: Возвращает записи текущего пациента. Границы периода `from_date` и `to_date` включительны и относятся к локальным датам пациента.
+      parameters: &period [*limit, *offset, &from {$ref: '#/components/parameters/From'}, &to {$ref: '#/components/parameters/To'}]
+      responses:
+        '200': {description: Записи дневника, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DiaryPage'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '422': {description: 'Неверный формат даты или параметров пагинации (`VALIDATION_ERROR`); начало периода позже конца (`INVALID_DATE_RANGE`).', content: *errorBody}
+        '500': *internal500
+    post:
+      tags: [Кабинет и дневник]
+      operationId: createDiaryEntry
+      summary: Добавить запись
+      description: Сохраняет показатели симптомов на указанную дату, в том числе боль, длительность скованности и усталость. К записи можно добавить заметку.
+      parameters: *command
+      requestBody: &diary {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DiaryInput'}}}}
+      responses:
+        '202': *accepted
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Отсутствует UUID ключа или невалидны данные дневника (`VALIDATION_ERROR`), например не указана дата или оценка боли вне шкалы 0–10.', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/diary-entries/{entry_id}:
+    parameters: [{in: path, name: entry_id, required: true, schema: *id}]
+    get:
+      tags: [Кабинет и дневник]
+      operationId: getDiaryEntry
+      summary: Прочитать запись
+      description: Возвращает дату, показатели и заметку одной записи дневника по `entry_id`. Запись доступна только её владельцу.
+      responses:
+        '200': {description: Запись, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DiaryEntry'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '404': {description: 'Записи с таким `entry_id` нет в дневнике текущего пациента (`NOT_FOUND`), в том числе если она удалена или принадлежит другому пациенту.', content: *errorBody}
+        '422': {description: 'Параметр `entry_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+    put:
+      tags: [Кабинет и дневник]
+      operationId: replaceDiaryEntry
+      summary: Изменить запись
+      description: Заменяет содержимое записи целиком. Передайте все обязательные показатели, даже если изменилось только одно значение.
+      parameters: *command
+      requestBody: *diary
+      responses:
+        '202': &diaryReceipt {description: 'Проверьте `status_url`. Если записи с указанным ID нет в дневнике пациента, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Неверен UUID записи или ключа; не переданы все обязательные показатели дневника либо значения вне допустимого диапазона (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+    delete:
+      tags: [Кабинет и дневник]
+      operationId: deleteDiaryEntry
+      summary: Удалить запись
+      description: Удаляет из дневника запись с указанным `entry_id`. Успешное выполнение операции означает, что запись больше недоступна.
+      parameters: *command
+      responses:
+        '202': *diaryReceipt
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Требуются UUID записи `entry_id` и UUID в заголовке `Idempotency-Key` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/medications:
+    get:
+      tags: [Препараты и приёмы]
+      operationId: listMedications
+      summary: Получить список препаратов
+      description: Возвращает препараты текущего пациента. Для каждого указана схема приёма с дозой, временем и датами.
+      parameters: &page [*limit, *offset]
+      responses:
+        '200': {description: Препараты, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/MedicationPage'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '422': *page422
+        '500': *internal500
+    post:
+      tags: [Препараты и приёмы]
+      operationId: addMedication
+      summary: Добавить препарат
+      description: Сохраняет схему, которую указал пациент. Передайте название, дозу, время приёма по местному времени и дату начала. Дата окончания необязательна.
+      parameters: *command
+      requestBody: &med {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/MedicationInput'}}}}
+      responses:
+        '202': *accepted
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Неверен UUID ключа или схема приёма: например, пропущена доза, время не в формате ЧЧ:ММ либо дата окончания раньше начала (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/medications/{medication_id}:
+    parameters: [{in: path, name: medication_id, required: true, schema: *id}]
+    put:
+      tags: [Препараты и приёмы]
+      operationId: updateMedication
+      summary: Изменить схему приёма
+      description: Обновляет дозу и расписание препарата для будущих приёмов. Уже сделанные отметки остаются в журнале.
+      parameters: *command
+      requestBody: *med
+      responses:
+        '202': &medReceipt {description: 'Проверьте `status_url`. Если у пациента нет препарата с этим ID, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Неверен UUID препарата или ключа, дата окончания раньше начала либо новая схема приёма не соответствует формату (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+    delete:
+      tags: [Препараты и приёмы]
+      operationId: stopMedication
+      summary: Остановить расписание
+      description: Прекращает планирование приёмов выбранного препарата. Ранее отмеченные приёмы и пропуски остаются в журнале.
+      parameters: *command
+      responses:
+        '202': *medReceipt
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Требуются UUID препарата `medication_id` и UUID в заголовке `Idempotency-Key` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/doses:
+    get:
+      tags: [Препараты и приёмы]
+      operationId: listDoses
+      summary: Посмотреть журнал приёмов
+      description: Возвращает расписание и отметки за сегодня в часовом поясе пациента. Для другого периода передайте обе даты включительно. Фильтр `status=missed` оставляет только отмеченные пропуски.
+      parameters: [*limit, *offset, *from, *to, {in: query, name: status, schema: {enum: [scheduled, taken, missed]}}, {in: query, name: medication_id, schema: *id}]
+      responses:
+        '200': {description: Слоты приёма и отметки, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DosePage'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '422': {description: 'Передана только одна граница периода или начало позже конца (`INVALID_DATE_RANGE`). Неверная дата, UUID препарата, статус или пагинация дают `VALIDATION_ERROR`.', content: *errorBody}
+        '500': *internal500
+  /me/doses/{dose_id}/intake:
+    parameters: [{in: path, name: dose_id, required: true, schema: *id}]
+    put:
+      tags: [Препараты и приёмы]
+      operationId: markIntake
+      summary: Отметить приём
+      description: Сохраняет или исправляет отметку для одного запланированного приёма. Используйте `taken`, если препарат принят, или `missed`, если приём пропущен.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Intake'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если в расписании пациента нет этого приёма, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Неверен UUID приёма или ключа, статус отличается от `taken` и `missed`, либо заметка длиннее 500 символов (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/reminder-settings:
+    get:
+      tags: [Напоминания и уведомления]
+      operationId: getReminderSettings
+      summary: Проверить напоминания
+      description: Показывает, включены ли напоминания, какой часовой пояс и какие каналы доставки выбраны.
+      responses:
+        '200': {description: Настройки, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ReminderSettings'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '500': *internal500
+    put:
+      tags: [Напоминания и уведомления]
+      operationId: updateReminderSettings
+      summary: Настроить напоминания
+      description: Сохраняет выбранные каналы и часовой пояс IANA. Чтобы отключить напоминания, передайте `false` в поле `enabled`.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ReminderSettings'}}}}
+      responses:
+        '202': *accepted
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Неверен UUID ключа, часовой пояс не распознан либо при включённых напоминаниях не выбран ни один допустимый канал (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /me/notifications:
+    get:
+      tags: [Напоминания и уведомления]
+      operationId: listNotifications
+      summary: Получить уведомления
+      description: Возвращает уведомления, уже доставленные пациенту внутри портала. Для списка непрочитанных укажите `unread=true`.
+      parameters: [*limit, *offset, {in: query, name: unread, schema: {type: boolean, default: false}, description: При true — только непрочитанные}]
+      responses:
+        '200': {description: Уведомления пациента, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/NotificationPage'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '422': {description: 'Параметр `unread` не является логическим значением или неверно заданы `limit` и `offset` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /me/notifications/{notification_id}/read:
+    parameters: [{in: path, name: notification_id, required: true, schema: *id}]
+    put:
+      tags: [Напоминания и уведомления]
+      operationId: readNotification
+      summary: Отметить как прочитанное
+      description: Меняет статус одного уведомления. Оно остаётся в общей ленте, но больше не попадает в выборку непрочитанных.
+      parameters: *command
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если такого уведомления нет у текущего пациента, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Требуются UUID уведомления `notification_id` и UUID в заголовке `Idempotency-Key` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /reports:
+    post:
+      tags: [Отчёты и доступ врача]
+      operationId: requestPdf
+      summary: Заказать PDF-отчёт
+      description: Для отчёта `screening` укажите точную версию результата. Для отчёта `doctor` выберите период и разделы кабинета пациента. После успеха операции используйте `report_id`, чтобы проверить готовность файла.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ReportRequest'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если указанная версия результата недоступна инициатору, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': {description: 'Нужны доверенный `Origin` и `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`). Для `kind=doctor` также нужна сессия пациента с действующим согласием (`CONSENT_REQUIRED`); для `screening` достаточно гостевой.', content: *errorBody}
+        '409': *key409
+        '422': {description: 'Неверен UUID ключа или состав запроса для выбранного `kind`: для `screening` нужны ID и версия результата, для `doctor` — корректный период и непустой список разделов (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /reports/{report_id}:
+    parameters: [&reportId {in: path, name: report_id, required: true, schema: *id}]
+    get:
+      tags: [Отчёты и доступ врача]
+      operationId: getReport
+      summary: Проверить готовность отчёта
+      description: Возвращает состояние самого отчёта, а не операции заказа. Ссылка `download_url` появляется только в состоянии `ready`.
+      responses:
+        '200': {description: Статус отчёта отдельно от статуса команды, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Report'}}}}
+        '400': *host400
+        '401': *session401
+        '403': &report403 {description: 'Отчёт принадлежит пользователю, но для доступа к врачебному отчёту больше нет действующего согласия (`CONSENT_REQUIRED`).', content: *errorBody}
+        '404': &report404 {description: 'Отчёта с таким ID нет у владельца сессии. Чужой отчёт также возвращает `NOT_FOUND`, чтобы не раскрывать его существование.', content: *errorBody}
+        '422': &report422 {description: 'Параметр `report_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /reports/{report_id}/pdf:
+    parameters: [*reportId]
+    get:
+      tags: [Отчёты и доступ врача]
+      operationId: downloadOwnPdf
+      summary: Скачать свой отчёт
+      description: Возвращает владельцу готовый PDF как вложение. Пока файл не готов, сервер отвечает `409 REPORT_NOT_READY`.
+      responses:
+        '200': {$ref: '#/components/responses/Pdf'}
+        '400': *host400
+        '401': *session401
+        '403': *report403
+        '404': *report404
+        '409': {description: 'Отчёт существует, но PDF ещё не готов (`REPORT_NOT_READY`). Проверьте статус отчёта перед скачиванием. В демостенде файл готов сразу.', content: *errorBody}
+        '422': *report422
+        '500': *internal500
+        '503': *file503
+  /reports/{report_id}/shares:
+    parameters: [*reportId]
+    post:
+      tags: [Отчёты и доступ врача]
+      operationId: issueDoctorLink
+      summary: Создать ссылку для врача
+      description: Пациент может открыть доступ к одному своему готовому врачебному отчёту на 24 часа. После успеха операции используйте `share_id`, чтобы получить ссылку.
+      parameters: *command
+      responses:
+        '202': {description: 'Проверьте `status_url`: `NOT_FOUND` — отчёт не найден у пациента; `DOCTOR_REPORT_REQUIRED` — указан отчёт скрининга, а не врачебный отчёт.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Требуются UUID отчёта `report_id` и UUID в заголовке `Idempotency-Key` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /reports/{report_id}/shares/{share_id}:
+    parameters: [*reportId, {in: path, name: share_id, required: true, schema: *id}]
+    get:
+      tags: [Отчёты и доступ врача]
+      operationId: getDoctorLink
+      summary: Получить ссылку для врача
+      description: Возвращает владельцу ссылку для передачи врачу и время окончания доступа. Повторный запрос не продлевает срок.
+      responses:
+        '200': {description: Ссылка для передачи врачу, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Share'}}}}
+        '400': *host400
+        '401': *session401
+        '403': *patient403
+        '404': {description: 'У владельца нет ссылки с таким `share_id` для данного отчёта (`NOT_FOUND`).', content: *errorBody}
+        '410': {description: 'Ссылка была выдана, но истекли 24 часа или владелец отозвал её (`SHARE_EXPIRED_OR_REVOKED`).', content: *errorBody}
+        '422': {description: 'Оба параметра пути — `report_id` и `share_id` — должны быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+    delete:
+      tags: [Отчёты и доступ врача]
+      operationId: revokeDoctorLink
+      summary: Отозвать ссылку
+      description: Досрочно прекращает доступ по выбранной ссылке. Скачать отчёт по ней после отзыва нельзя.
+      parameters: *command
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если у владельца нет указанной пары отчёт/ссылка, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *patientWrite403
+        '409': *key409
+        '422': {description: 'Требуются UUID отчёта, ссылки и ключа идемпотентности (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /shared-reports/download:
+    post:
+      tags: [Отчёты и доступ врача]
+      operationId: redeemDoctorLink
+      summary: Скачать отчёт по ссылке
+      description: Передайте токен из фрагмента ссылки в теле запроса. Сессия не нужна; токен открывает только один PDF, а не кабинет пациента. Для истёкшей или отозванной ссылки сервер возвращает `410`.
+      security: []
+      parameters: [*csrf]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ShareToken'}}}}
+      responses:
+        '200': {$ref: '#/components/responses/Pdf'}
+        '400': *write400
+        '403': *browser403
+        '404': {description: 'Передан токен, по которому не выдавалась ссылка (`NOT_FOUND`). Вход в учётную запись не требуется.', content: *errorBody}
+        '410': {description: 'Ссылка известна, но срок истёк, владелец отозвал ссылку или согласие на обработку медицинских данных (`SHARE_EXPIRED_OR_REVOKED`). PDF не выдаётся.', content: *errorBody}
+        '422': {description: 'В теле нужен `token` — непустая строка длиной не более 2048 символов (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *file503
+  /community/topics:
+    get:
+      tags: [Форум]
+      operationId: listTopics
+      summary: Посмотреть темы
+      description: Возвращает опубликованные темы постранично. Для чтения форума сессия не нужна.
+      security: []
+      parameters: *page
+      responses:
+        '200': {description: Темы, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/TopicPage'}}}}
+        '400': *host400
+        '422': *page422
+        '500': *internal500
+    post:
+      tags: [Форум]
+      operationId: submitTopic
+      summary: Предложить тему
+      description: Отправляет заголовок и текст от имени зарегистрированного участника. Тема появится на форуме только после одобрения модератором.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/TopicInput'}}}}
+      responses:
+        '202': {description: 'Тема принята на модерацию. Успешный статус команды подтверждает приём заявки, а не публикацию темы.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *forum403
+        '409': *key409
+        '422': {description: 'Неверен UUID ключа, заголовок или текст пусты либо превышают 160 и 4000 символов соответственно (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /community/topics/{topic_id}:
+    parameters: [&topicId {in: path, name: topic_id, required: true, schema: *id}]
+    get:
+      tags: [Форум]
+      operationId: getTopic
+      summary: Прочитать тему
+      description: Возвращает заголовок и текст опубликованной темы, псевдоним автора и время создания. Ответы запрашиваются отдельно.
+      security: []
+      responses:
+        '200': {description: Тема, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Topic'}}}}
+        '400': *host400
+        '404': &topic404 {description: 'Тема не найдена, ещё не опубликована или была скрыта модератором (`NOT_FOUND`).', content: *errorBody}
+        '422': {description: 'Параметр `topic_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+  /community/topics/{topic_id}/posts:
+    parameters: [*topicId]
+    get:
+      tags: [Форум]
+      operationId: listPosts
+      summary: Прочитать ответы
+      description: Возвращает ответы на опубликованную тему в порядке публикации. Ответы, которые ещё проходят модерацию, в список не входят.
+      security: []
+      parameters: *page
+      responses:
+        '200': {description: Ответы по времени публикации, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/PostPage'}}}}
+        '400': *host400
+        '404': *topic404
+        '422': {description: 'Неверный UUID темы или параметры пагинации (`VALIDATION_ERROR`). Если тема опубликована, но ответов ещё нет, возвращается пустой список.', content: *errorBody}
+        '500': *internal500
+    post:
+      tags: [Форум]
+      operationId: submitPost
+      summary: Ответить в теме
+      description: Отправляет ответ зарегистрированного участника на проверку. Другие читатели увидят его только после одобрения модератором.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/PostInput'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`: `NOT_FOUND` означает, что тема не существует, скрыта или ещё не опубликована. Успех означает отправку ответа на модерацию.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *forum403
+        '409': *key409
+        '422': {description: 'Неверен UUID темы или ключа; текст ответа пуст, отсутствует или длиннее 4000 символов (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /community/flags:
+    post:
+      tags: [Форум]
+      operationId: flagContent
+      summary: Подать жалобу
+      description: Зарегистрированный участник указывает опубликованную тему или ответ и причину жалобы. Материал не скрывается автоматически.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Flag'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`. Если тема или ответ не найдены среди опубликованных, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': *forum403
+        '409': *key409
+        '422': {description: 'Неверен UUID ключа, не указана причина или некорректна цель жалобы: нужны `topic` либо `post` и UUID публикации (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
+  /moderation/cases:
+    get:
+      tags: [Модерация]
+      operationId: listModerationCases
+      summary: Открыть очередь модерации
+      description: Возвращает модератору открытые заявки на публикацию и жалобы. Для каждого обращения указана версия, необходимая для принятия решения.
+      parameters: *page
+      responses:
+        '200': {description: Очередь на решение, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ModerationPage'}}}}
+        '400': *host400
+        '401': *session401
+        '403': {description: 'Гость должен войти (`REGISTRATION_REQUIRED`); у зарегистрированного пользователя должна быть роль модератора (`MODERATOR_REQUIRED`).', content: *errorBody}
+        '422': *page422
+        '500': *internal500
+  /moderation/cases/{case_id}/decision:
+    parameters: [{in: path, name: case_id, required: true, schema: *id}]
+    put:
+      tags: [Модерация]
+      operationId: moderateContent
+      summary: Принять решение
+      description: Модератор указывает версию обращения и причину решения. Публикацию можно одобрить или отклонить; по жалобе — скрыть материал или отклонить жалобу.
+      parameters: *command
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Decision'}}}}
+      responses:
+        '202': {description: 'Проверьте `status_url`: `NOT_FOUND` — обращение уже закрыто, не найдено или тема ответа недоступна; `CASE_VERSION_CONFLICT` — версия обращения изменилась; `INVALID_MODERATION_ACTION` — действие не подходит для этого вида обращения.', headers: *receiptHeaders, content: *receiptBody}
+        '400': *write400
+        '401': *session401
+        '403': {description: 'Требуются доверенный `Origin` и `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`). Гостю нужна регистрация (`REGISTRATION_REQUIRED`), остальным пользователям — права модератора (`MODERATOR_REQUIRED`).', content: *errorBody}
+        '409': *key409
+        '422': {description: 'Проверьте UUID обращения и ключа, допустимое значение `action`, причину и положительный `expected_version` (`VALIDATION_ERROR`).', content: *errorBody}
+        '500': *internal500
+        '503': *command503
