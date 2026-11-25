@@ -7,12 +7,10 @@ from contextlib import AbstractContextManager, contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from .domain.session import QuestionnaireVersion, SavedAnswer, StoredResult, StoredSession
-
-if TYPE_CHECKING:
-    from .registry import BaseRegistry
+from .registry import BaseRegistry
 
 
 DEMO_DISCLAIMER = "Демонстрационная анкета, не медицинская рекомендация."
