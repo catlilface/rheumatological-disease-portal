@@ -30,7 +30,7 @@ CREATE TABLE screening_answers (
 CREATE TABLE screening_results (
     id uuid_v7 PRIMARY KEY DEFAULT uuidv7(),
     session_id uuid_v7 NOT NULL UNIQUE REFERENCES screening_sessions,
-    -- Exact MIS-22 revision n is revisions -> (n-1). Each element is a full snapshot.
+    -- Result revision n is revisions -> (n-1). Each element is a full snapshot.
     revisions jsonb NOT NULL CHECK (jsonb_typeof(revisions)='array'),
     version integer GENERATED ALWAYS AS (jsonb_array_length(revisions)) STORED,
     UNIQUE (session_id, id)

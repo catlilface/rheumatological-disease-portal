@@ -1,4 +1,4 @@
-"""Run Screening tests against a disposable PostgreSQL with the MIS-27 roles."""
+"""Run Screening tests against a disposable PostgreSQL with app and migrator roles."""
 
 import os
 import subprocess
