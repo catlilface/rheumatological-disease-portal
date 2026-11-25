@@ -1,12 +1,10 @@
 """Calculate a Screening result from validated rules and saved answers."""
 
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
-from typing import Literal
 
-
-AnswerValue = bool | str
-ScoreRange = tuple[int, int | None]
+from .domain.calculation import (
+    AnswerValue, Recommendation, RedFlagMatch, ScoredAnswer, ScoreRange, ScreeningCalculation,
+)
 
 
 class AnswerError(ValueError):
@@ -15,44 +13,6 @@ class AnswerError(ValueError):
     def __init__(self, question_code: str, message: str):
         self.question_code = question_code
         super().__init__(f"Question {question_code!r}: {message}")
-
-
-@dataclass(frozen=True, slots=True)
-class ScoredAnswer:
-    question_code: str
-    block_code: str
-    value: AnswerValue
-    weighted_score: int
-
-
-@dataclass(frozen=True, slots=True)
-class RedFlagMatch:
-    code: str
-    question_code: str
-    option_code: str
-    matched_current_answer: bool
-
-
-@dataclass(frozen=True, slots=True)
-class Recommendation:
-    code: str
-    text: str
-
-
-@dataclass(frozen=True, slots=True)
-class ScreeningCalculation:
-    survey_id: str
-    weights_version: str
-    block_scores: dict[str, int]
-    total_score: int | None
-    scoring_complete: bool
-    level: str | None
-    reason: Literal["score", "red_flag", "incomplete"]
-    matched_range: ScoreRange | None
-    missing_required: tuple[str, ...]
-    contributing_answers: tuple[ScoredAnswer, ...]
-    red_flags: tuple[RedFlagMatch, ...]
-    recommendations: tuple[Recommendation, ...]
 
 
 def _option_code_and_weight(question: Mapping, value: AnswerValue) -> tuple[str, int]:
