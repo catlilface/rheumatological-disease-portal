@@ -1,17 +1,52 @@
 #!/usr/bin/env bash
 # Check real gRPC calls, Kafka consumption and denied sockets from the BFF.
 set -euo pipefail
-case ${1:?usage: bash infra/check-transport.sh compose|k8s} in
+mode=${1:?usage: bash infra/check-transport.sh compose|k8s}
+case $mode in
  compose) run() { docker compose exec -T "$@"; }; logs() { docker compose logs --since "$1" content; };;
  k8s) run() { local s=$1; shift; kubectl -n rdp-mvp exec -i "deploy/$s" -- "$@"; }; logs() { kubectl -n rdp-mvp logs deploy/content --since-time="$1"; };;
  *) exit 2;;
 esac
-run bff python - <<'PY'
+run bff python - "$mode" <<'PY'
 import socket
-for service, port in [('postgres',5432), ('qdrant',6333), ('seaweedfs',8888), ('kafka',19092)]:
+import sys
+
+blocked = [('qdrant', 6333), ('seaweedfs', 8888)]
+if sys.argv[1] == 'k8s':
+    blocked.extend([('postgres', 5432), ('kafka', 19092)])
+for service, port in blocked:
     try: socket.create_connection((service,port), timeout=2).close()
     except (socket.gaierror, TimeoutError, ConnectionRefusedError): continue
     raise SystemExit(f'unexpected direct access: {service}:{port}')
+
+if sys.argv[1] == 'compose':
+    import os
+    from contextlib import closing
+    from pathlib import Path
+
+    from confluent_kafka import Producer
+    from pg8000.dbapi import DatabaseError, connect
+
+    settings = {
+        'host': os.environ['PGHOST'],
+        'user': 'mis_bff_app',
+        'password': Path('/run/secrets/db-password').read_text().strip(),
+        'timeout': 5,
+    }
+    with closing(connect(database='mis_bff', **settings)) as connection:
+        connection.cursor().execute('SELECT id FROM public.kafka_outbox LIMIT 0')
+    for owner in ('iam', 'screening', 'content', 'reporting', 'files', 'ai'):
+        database = f'mis_{owner}'
+        try:
+            with closing(connect(database=database, **settings)):
+                raise SystemExit(f'unexpected BFF access to {database}')
+        except DatabaseError as error:
+            if error.args[0].get('C') != '42501':
+                raise
+
+    producer = Producer({'bootstrap.servers': os.environ['KAFKA_BOOTSTRAP_SERVERS']})
+    if not producer.list_topics(timeout=5).brokers:
+        raise SystemExit('BFF could not discover Kafka brokers')
 PY
 run files python - <<'PY'
 import grpc
