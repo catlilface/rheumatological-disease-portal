@@ -1,7 +1,5 @@
 """Apply Screening commands and write v1 events in one transaction."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 from datetime import UTC, datetime
 from hashlib import sha256

@@ -1,7 +1,5 @@
 """Transactional storage contract and a local in-memory implementation."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager, contextmanager
 from copy import deepcopy

@@ -1,7 +1,5 @@
 """PostgreSQL implementation of Screening's transactional storage."""
 
-from __future__ import annotations
-
 import json
 import os
 from collections.abc import Callable
