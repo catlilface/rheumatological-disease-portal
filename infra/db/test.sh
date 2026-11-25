@@ -26,7 +26,7 @@ admin() { docker compose exec -T postgres psql -XqAt -v ON_ERROR_STOP=1 -U postg
 fixtures=(access_audit screening_results material_versions report_snapshots stored_files article_projection)
 fixture_rows() { app "$1" "$1" -c "SELECT to_jsonb(t)::text FROM $2 AS t ORDER BY 1"; }
 make migrate
-expected_dbs=$(printf 'mis_%s\n' "${owners[@]}" | LC_ALL=C sort)
+expected_dbs=$(printf 'mis_%s\n' "${owners[@]}" bff | LC_ALL=C sort)
 actual_dbs=$(admin postgres "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY datname COLLATE \"C\"")
 [[ $actual_dbs == "$expected_dbs" ]] || { echo "Wrong databases: $actual_dbs" >&2; exit 1; }
 for i in "${!owners[@]}"; do
