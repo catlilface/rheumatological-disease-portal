@@ -4,9 +4,6 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"net/url"
-
-	scalar "github.com/bdpiprava/scalar-go"
 )
 
 func (a *API) reference(files fs.FS) {
@@ -19,20 +16,14 @@ func (a *API) reference(files fs.FS) {
 		})
 	}
 	a.mux.HandleFunc("GET /scalar", func(w http.ResponseWriter, r *http.Request) {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		source := url.URL{Scheme: scheme, Host: r.Host, Path: "/scalar/" + spec}
-		page, err := scalar.NewV2(
-			scalar.WithSpecURL(source.String()),
-			scalar.WithCDN("https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.83.0"),
-			scalar.WithMetaDataOpts(scalar.WithTitle("BFF API Reference")),
-		)
-		if err != nil {
-			http.Error(w, "API reference unavailable", http.StatusInternalServerError)
-			return
-		}
+		const page = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BFF API Reference</title></head>
+<body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.83.0"></script>
+<script>Scalar.createApiReference('#app', {url: '/scalar/` + spec + `', showToolbar: 'never'})</script>
+</body></html>`
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, page)
 	})

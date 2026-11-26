@@ -18,7 +18,7 @@ func TestScalarReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, marker := range map[string]string{
-		"/scalar":                     "/scalar/bff-v1.openapi.yaml",
+		"/scalar":                     `url: '/scalar/bff-v1.openapi.yaml'`,
 		"/scalar/bff-v1.openapi.yaml": "schemas.yaml#/$defs/Accepted",
 		"/scalar/schemas.yaml":        "$defs:",
 	} {

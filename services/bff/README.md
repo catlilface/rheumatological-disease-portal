@@ -105,7 +105,7 @@ go vet ./...
 
 Версия Go указана в `go.mod`. Готовность: `curl http://localhost:8000/health`.
 
-После запуска откройте [Scalar API Reference](http://localhost:8000/scalar). Страница берёт актуальный контракт и связанные схемы с самого BFF (`/scalar/bff-v1.openapi.yaml`, `/scalar/schemas.yaml`); браузеру нужен доступ к `cdn.jsdelivr.net` для загрузки Scalar. Отдельный контейнер документации не требуется. Если HTTPS завершается на обратном прокси, сохраните внешний `Host` и добавьте к ответу `/scalar` заголовок `Content-Security-Policy: upgrade-insecure-requests`, чтобы браузер загрузил контракт по HTTPS.
+После запуска откройте [Scalar API Reference](http://localhost:8080/scalar). Страница берёт актуальный контракт и связанные схемы с самого BFF (`/scalar/bff-v1.openapi.yaml`, `/scalar/schemas.yaml`); браузеру нужен доступ к `cdn.jsdelivr.net` для загрузки Scalar. Отдельный контейнер документации не требуется. Браузер загружает контракт с того же адреса и по той же схеме, что и страницу.
 
 На самом BFF `/docs`, `/redoc` и `/openapi.json` не публикуются. Исходный контракт: [OpenAPI v1](../../contracts/http/bff-v1.openapi.yaml). BFF ищет `contracts/http/` среди родительских каталогов и читает `.env` из корня репозитория; переменные окружения имеют приоритет. Dockerfile копирует контракты в образ.
 

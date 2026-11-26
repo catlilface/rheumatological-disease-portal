@@ -3,7 +3,6 @@ module portal/bff
 go 1.27.4
 
 require (
-	github.com/bdpiprava/scalar-go v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
