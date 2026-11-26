@@ -1,10 +1,12 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { t } from './src/shared/i18n/index.ts'
+import { mockBff } from './mocks/vite.ts'
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
   plugins: [
     react(),
+    ...(command === 'serve' && mode === 'mock' ? [mockBff()] : []),
     {
       name: 'portal-metadata',
       transformIndexHtml() {
@@ -20,8 +22,19 @@ export default defineConfig({
     },
   ],
   resolve: { tsconfigPaths: true },
+  server: {
+    proxy:
+      mode === 'mock'
+        ? undefined
+        : {
+            '/api/': {
+              target: process.env.BFF_PROXY_TARGET ?? 'http://localhost:8000',
+              ws: true,
+            },
+          },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/app/testing/setup.ts'],
   },
-})
+}))

@@ -55,6 +55,54 @@ a,
   text-underline-offset: 0.18em;
 }
 
+.portal-flow {
+  display: grid;
+  gap: 1rem;
+}
+
+.portal-flow fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.portal-flow fieldset label {
+  display: block;
+  width: fit-content;
+  padding-block: 0.25rem;
+}
+
+.portal-flow button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.portal-flow button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.portal-actions {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.material-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.material-text {
+  white-space: pre-wrap;
+}
+
 a:hover,
 .text-button:hover {
   color: var(--color-accent-hover);

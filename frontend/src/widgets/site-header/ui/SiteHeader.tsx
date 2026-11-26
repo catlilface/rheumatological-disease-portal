@@ -10,6 +10,15 @@ export default function SiteHeader() {
           {t('portal.title')}
         </Link>
         <nav className="header__nav" aria-label={t('nav.primary')}>
+          <NavLink to="/screening" caseSensitive>
+            {t('nav.screening')}
+          </NavLink>
+          <NavLink to="/library" caseSensitive>
+            {t('nav.library')}
+          </NavLink>
+          <NavLink to="/doctor" end caseSensitive>
+            {t('nav.doctor')}
+          </NavLink>
           <NavLink to="/documents" end caseSensitive>
             {t('nav.documents')}
           </NavLink>

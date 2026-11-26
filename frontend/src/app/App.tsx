@@ -1,7 +1,18 @@
 import { useEffect, type ReactNode } from 'react'
 import { Route, Routes } from 'react-router'
 
-import { AboutPage, DocumentsPage, HomePage, NotFoundPage } from '@pages'
+import {
+  AboutPage,
+  ArticlePage,
+  DoctorPage,
+  DocumentsPage,
+  HomePage,
+  LibraryPage,
+  NotFoundPage,
+  ResultPage,
+  ScreeningPage,
+  ScreeningSessionPage,
+} from '@pages'
 import { SiteFooter, SiteHeader } from '@widgets'
 import { t, type MessageKey } from '@shared/i18n'
 
@@ -51,6 +62,60 @@ export default function App() {
             element={
               <PageContent title="documents.title">
                 <DocumentsPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="screening"
+            caseSensitive
+            element={
+              <PageContent title="nav.screening">
+                <ScreeningPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="screening/:screeningId"
+            caseSensitive
+            element={
+              <PageContent title="nav.screening">
+                <ScreeningSessionPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="results/:resultId/versions/:version"
+            caseSensitive
+            element={
+              <PageContent title="result.title">
+                <ResultPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="library"
+            caseSensitive
+            element={
+              <PageContent title="nav.library">
+                <LibraryPage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="library/:slug"
+            caseSensitive
+            element={
+              <PageContent title="nav.library">
+                <ArticlePage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="doctor"
+            caseSensitive
+            element={
+              <PageContent title="nav.doctor">
+                <DoctorPage />
               </PageContent>
             }
           />
