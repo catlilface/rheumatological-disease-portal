@@ -1,4 +1,5 @@
-"""Exercise the v1 browser contract over a loopback Kubernetes port-forward (stdlib only)."""
+"""Exercise the v1 browser contract over loopback (stdlib only)."""
+import argparse
 import json
 import sys
 from http.client import HTTPConnection
@@ -6,7 +7,11 @@ from http.cookies import SimpleCookie
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-origin = sys.argv[1].rstrip('/')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('origin')
+parser.add_argument('--via-frontend', action='store_true', help='Test only routes exposed by the frontend proxy')
+args = parser.parse_args()
+origin = args.origin.rstrip('/')
 url = urlsplit(origin)
 # The cluster port-forward uses HTTP. Only replay this probe's own synthetic
 # guest cookie over loopback; real browsers still require Secure cookies and TLS.
@@ -48,7 +53,9 @@ def command(path, data):
     return {r['resource_type']: r['resource_id'] for r in op['resources']}
 
 
-assert get('/health') == {'status': 'ok'}
+# /health is private to the BFF; Compose checks it before the frontend probe runs.
+if not args.via_frontend:
+    assert get('/health') == {'status': 'ok'}
 survey = get(base + '/surveys/rheuma_screening_v1')
 assert any(q['code'] == 'В1' for b in survey['blocks'] for q in b['questions'])
 headers, _ = request(base + '/auth/guest-sessions', method='POST', status=201)
