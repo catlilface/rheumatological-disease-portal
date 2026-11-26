@@ -1,16 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createMockBff } from '../../../mocks/bff'
-import { survey } from '../../../mocks/fixtures'
-import { mockBrowserFetch } from '../../../mocks/browser-fetch'
 import { createBffClient } from './client'
+import type { Operation } from './contracts'
 
 const start = {
-  survey_id: survey.survey_id,
-  weights_version: survey.weights_version,
-  disclaimer_version: survey.disclaimer_version,
+  survey_id: 'rheuma_screening_v1',
+  weights_version: 'draft-v1',
+  disclaimer_version: 'demo-v1',
   disclaimer_accepted: true,
 } as const
 
+const operationId = '02995529-91a3-4550-aa71-aa9fe798d274'
+const statusUrl = '/api/v1/operations/screening/' + operationId
+const receipt = (url = statusUrl) =>
+  Response.json({ operation_id: operationId, status_url: url }, { status: 202 })
+const status = (state: Operation['state'], error?: Operation['error']) =>
+  Response.json({
+    operation_id: operationId,
+    state,
+    resources: [],
+    updated_at: '2026-01-01T00:00:00Z',
+    error,
+  } satisfies Operation)
 const pending = () => {}
 const signal = new AbortController().signal
 
@@ -18,34 +28,29 @@ afterEach(() => vi.useRealTimers())
 
 describe('BFF client', () => {
   it('keeps the key and body on transport retry and allocates a new key for a new intent', async () => {
-    const server = mockBrowserFetch(createMockBff({ pendingPolls: 0 }))
-    let lostResponse = false
-    const fetcher = vi.fn<typeof fetch>(async (path, init) => {
-      const response = await server(path, init)
-      if (path === '/api/v1/screenings' && !lostResponse) {
-        lostResponse = true
-        throw new TypeError('Connection reset after BFF accepted the command')
-      }
-      return response
-    })
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('Connection reset'))
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(status('succeeded'))
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(status('succeeded'))
     const api = createBffClient(fetcher)
-    await api.ensureSession()(signal, pending)
     const first = api.start(start)
     await expect(first(signal, pending)).rejects.toMatchObject({
       code: 'NETWORK_ERROR',
       retryable: true,
     })
-    const result = await first(signal, pending)
-    const other = await api.start(start)(signal, pending)
-    expect(result.resources[0].resource_id).not.toBe(
-      other.resources[0].resource_id,
-    )
+    await first(signal, pending)
+    await api.start(start)(signal, pending)
+
     const posts = fetcher.mock.calls.filter(
       ([path]) => path === '/api/v1/screenings',
     )
     const keys = posts.map(([, init]) =>
       new Headers(init?.headers).get('Idempotency-Key'),
     )
+    expect(keys).toHaveLength(3)
     expect(keys[0]).toBeTruthy()
     expect(keys[0]).toBe(keys[1])
     expect(keys[1]).not.toBe(keys[2])
@@ -59,63 +64,68 @@ describe('BFF client', () => {
 
   it('polls pending operations and retries polling without resending an accepted command', async () => {
     vi.useFakeTimers()
-    const server = mockBrowserFetch()
-    let brokenPoll = true
-    const fetcher = vi.fn<typeof fetch>(async (path, init) => {
-      if (String(path).includes('/operations/') && brokenPoll) {
-        brokenPoll = false
-        return Response.json({ code: 'UNAVAILABLE' }, { status: 503 })
-      }
-      return server(path, init)
-    })
-    const api = createBffClient(fetcher)
-    await api.ensureSession()(signal, pending)
-    const task = api.start(start)
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(
+        Response.json({ code: 'UNAVAILABLE' }, { status: 503 }),
+      )
+      .mockResolvedValueOnce(status('pending'))
+      .mockResolvedValueOnce(status('succeeded'))
+    const task = createBffClient(fetcher).start(start)
     const onPending = vi.fn()
     await expect(task(signal, onPending)).rejects.toMatchObject({
       code: 'UNAVAILABLE',
       retryable: true,
     })
-    const result = task(signal, onPending)
-    const completion = expect(result).resolves.toMatchObject({
+    const completion = expect(task(signal, onPending)).resolves.toMatchObject({
       state: 'succeeded',
     })
     await vi.advanceTimersByTimeAsync(1000)
     await completion
     expect(onPending).toHaveBeenCalledTimes(2)
-    expect(
-      fetcher.mock.calls.filter(([path]) => path === '/api/v1/screenings'),
-    ).toHaveLength(1)
+    expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/screenings',
+      statusUrl,
+      statusUrl,
+      statusUrl,
+    ])
   })
 
-  it('surfaces terminal operation errors and preserves private resource scope', async () => {
-    const api = createBffClient(
-      mockBrowserFetch(createMockBff({ pendingPolls: 0 })),
-    )
-    const unrelated = createBffClient(mockBrowserFetch())
-    await api.ensureSession()(signal, pending)
+  it('surfaces the error from a rejected operation', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(
+        status('rejected', {
+          code: 'DISCLAIMER_VERSION_MISMATCH',
+          message: 'The disclaimer has changed',
+        }),
+      )
     await expect(
-      api.start({ ...start, disclaimer_version: 'stale' })(signal, pending),
+      createBffClient(fetcher).start(start)(signal, pending),
     ).rejects.toMatchObject({
       code: 'DISCLAIMER_VERSION_MISMATCH',
       retryable: false,
     })
-    const operation = await api.start(start)(signal, pending)
+  })
+
+  it('surfaces a private resource denial without creating a session', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
+      )
     await expect(
-      unrelated.screening(operation.resources[0].resource_id, signal),
+      createBffClient(fetcher).screening(operationId, signal),
     ).rejects.toMatchObject({ code: 'SESSION_REQUIRED', status: 401 })
+    expect(fetcher).toHaveBeenCalledTimes(1)
   })
 
   it('blocks a receipt that would send a browser request outside the BFF', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json(
-        {
-          operation_id: 'a',
-          status_url: 'https://example.org/api/v1/operations/screening/a',
-        },
-        { status: 202 },
-      ),
-    )
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(receipt('https://example.org' + statusUrl))
     await expect(
       createBffClient(fetcher).start(start)(signal, pending),
     ).rejects.toMatchObject({ code: 'INVALID_BFF_URL' })

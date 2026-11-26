@@ -1,12 +1,12 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
 import { t } from './src/shared/i18n/index.ts'
-import { mockBff } from './mocks/vite.ts'
 
-export default defineConfig(({ command, mode }) => ({
+const bff = new URL(process.env.BFF_PROXY_TARGET ?? 'https://mis.clfs.wtf')
+
+export default defineConfig({
   plugins: [
     react(),
-    ...(command === 'serve' && mode === 'mock' ? [mockBff()] : []),
     {
       name: 'portal-metadata',
       transformIndexHtml() {
@@ -23,18 +23,29 @@ export default defineConfig(({ command, mode }) => ({
   ],
   resolve: { tsconfigPaths: true },
   server: {
-    proxy:
-      mode === 'mock'
-        ? undefined
-        : {
-            '/api/': {
-              target: process.env.BFF_PROXY_TARGET ?? 'http://localhost:8000',
-              ws: true,
-            },
-          },
+    proxy: {
+      '/api/': {
+        target: bff.origin,
+        changeOrigin: true,
+        ws: true,
+        configure(proxy) {
+          proxy.on('proxyReq', (upstream, request) => {
+            // The upstream sees its own origin only for same-origin browser requests.
+            const https =
+              'encrypted' in request.socket && request.socket.encrypted
+            const origin = `${https ? 'https' : 'http'}://${request.headers.host}`
+            if (request.headers.origin === origin) {
+              upstream.setHeader('Origin', bff.origin)
+            } else {
+              upstream.removeHeader('Origin')
+            }
+          })
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/app/testing/setup.ts'],
   },
-}))
+})
