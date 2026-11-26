@@ -31,6 +31,8 @@ spec:
         - containerPort: 50051
         env:
         - {name: PGHOST, value: postgres}
+        - {name: IAM_ADMIN_EMAIL, valueFrom: {secretKeyRef: {name: iam-bootstrap, key: email, optional: true}}}
+        - {name: IAM_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: iam-bootstrap, key: password, optional: true}}}
         volumeMounts:
         - {name: database, mountPath: /run/secrets, readOnly: true}
         - {name: tls, mountPath: /run/iam-tls, readOnly: true}
@@ -46,7 +48,7 @@ spec:
           - secret: {name: db-app-iam, items: [{key: password, path: db-password}]}
           - secret: {name: iam-key}
       - name: tls
-        secret: {secretName: iam-tls-iam}
+        secret: {secretName: portal-tls-v2-iam}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -61,7 +63,7 @@ spec:
   ingress:
   - from:
     - podSelector:
-        matchLabels: {app: bff}
+        matchExpressions: [{key: app, operator: In, values: [bff, screening]}]
     ports:
     - protocol: TCP
       port: 50051

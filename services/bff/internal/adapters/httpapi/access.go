@@ -9,6 +9,12 @@ import (
 // The remaining OpenAPI operations describe the isolated demonstration / future APIs.
 // Empty means a public or session-lifecycle operation (no domain resource).
 var mvpResources = map[string]string{
+	"setAccountRole": "", "registerPatient": "",
+	"getOnboarding": "cabinet", "finishOnboarding": "cabinet", "listScreeningResults": "cabinet",
+	"listMedications": "cabinet", "addMedication": "cabinet", "updateMedication": "cabinet", "stopMedication": "cabinet",
+	"listDoses": "cabinet", "markIntake": "cabinet", "getReminderSettings": "cabinet", "updateReminderSettings": "cabinet",
+	"listNotifications": "cabinet", "readNotification": "cabinet", "listDiaryEntries": "cabinet", "getDiaryEntry": "cabinet",
+	"createDiaryEntry": "cabinet", "replaceDiaryEntry": "cabinet", "deleteDiaryEntry": "cabinet",
 	"createGuestSession": "", "getPrincipal": "", "signIn": "", "signOut": "", "refreshSession": "",
 	"getMedicalDataPolicy": "", "getSurvey": "", "listArticles": "", "getArticle": "", "getDoctorRoute": "",
 	"startScreening": "subject", "getScreening": "screening", "saveAnswer": "screening",
@@ -23,6 +29,8 @@ func (a *API) checkResource(c *call, id string) error {
 	var r domain.Resource
 	var lookup error
 	switch mvpResources[id] {
+	case "cabinet":
+		r = domain.Ref("cabinet", c.actor.ID)
 	case "subject":
 		r = domain.Ref("subject", c.actor.ID)
 	case "screening":

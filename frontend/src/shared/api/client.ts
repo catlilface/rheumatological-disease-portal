@@ -75,11 +75,7 @@ function wait(ms: number, signal: AbortSignal) {
 export function createBffClient(
   fetcher: typeof fetch = (...args) => fetch(...args),
 ) {
-  async function request(
-    path: string,
-    signal: AbortSignal,
-    init?: RequestInit,
-  ) {
+  async function send(path: string, signal: AbortSignal, init?: RequestInit) {
     const url = bffPath(path)
     let response: Response
     try {
@@ -102,6 +98,53 @@ export function createBffClient(
       )
     }
     return response
+  }
+
+  let refreshing: Promise<void> | undefined
+  let generation = 0
+  const expired = (e: unknown) =>
+    e instanceof BffError && e.status === 401 && e.code === 'SESSION_REQUIRED'
+
+  async function recover() {
+    // A second tab may already have rotated the shared HttpOnly cookies.
+    const signal = AbortSignal.timeout(30_000)
+    try {
+      await send(prefix + '/auth/session', signal)
+    } catch (e) {
+      if (!expired(e)) throw e
+      const refresh = post(
+        '/auth/session/refresh',
+        undefined,
+        crypto.randomUUID(),
+      )
+      await send(refresh.path, signal, refresh.init)
+    }
+    generation++
+  }
+
+  async function request(
+    path: string,
+    signal: AbortSignal,
+    init?: RequestInit,
+  ) {
+    const before = generation
+    try {
+      return await send(path, signal, init)
+    } catch (e) {
+      if (!expired(e) || path === prefix + '/auth/guest-sessions') throw e
+      if (before === generation) {
+        refreshing ??= (
+          globalThis.navigator?.locks
+            ? navigator.locks.request('portal-session-refresh', recover)
+            : recover()
+        ).finally(() => {
+          refreshing = undefined
+        })
+        await refreshing
+      }
+      signal.throwIfAborted()
+      return send(path, signal, init)
+    }
   }
 
   async function json<T>(response: Response): Promise<T> {
@@ -130,8 +173,13 @@ export function createBffClient(
     }
   }
 
-  function command(path: string, body?: object): Command<Operation> {
+  function command(
+    path: string,
+    body?: object,
+    method = 'POST',
+  ): Command<Operation> {
     const { path: url, init } = post(path, body, crypto.randomUUID())
+    init.method = method
     let accepted: { receipt: Receipt; delay: number } | undefined
     return async (signal, onPending) => {
       if (!accepted) {
@@ -197,6 +245,55 @@ export function createBffClient(
 
   return {
     ensureSession,
+    principal: (signal: AbortSignal) => get<Principal>('/auth/session', signal),
+    async signIn(email: string, password: string, signal: AbortSignal) {
+      const { path, init } = post('/auth/session', { email, password })
+      return json<Principal>(await send(path, signal, init))
+    },
+    async signOut(signal: AbortSignal) {
+      await request(prefix + '/auth/session', signal, {
+        method: 'DELETE',
+        headers: { 'X-Portal-Request': '1' },
+      })
+    },
+    finishProfile: (
+      name: string,
+      diagnosis: string | null,
+      reminders: { enabled: boolean; timezone: string; channels: string[] },
+    ) =>
+      command(
+        '/me/onboarding',
+        { name, diagnosis, reminders, medications: [] },
+        'PUT',
+      ),
+    addMedication: (
+      name: string,
+      dose_text: string,
+      time: string,
+      starts_on: string,
+    ) =>
+      command('/me/medications', {
+        name,
+        dose_text,
+        local_times: [time],
+        starts_on,
+      }),
+    profile: (signal: AbortSignal) =>
+      get<{
+        name?: string
+        completed: boolean
+        reminders: { enabled: boolean; timezone: string; channels: string[] }
+        diagnosis: string | null
+        medications: {
+          medication_id: string
+          regimen: { name: string; dose_text: string }
+        }[]
+      }>('/me/onboarding', signal),
+    history: (offset: number, signal: AbortSignal) =>
+      get<{ items: Result[]; total: number; limit: number }>(
+        '/me/screening-results?offset=' + offset,
+        signal,
+      ),
     survey: (
       signal: AbortSignal,
       id = 'rheuma_screening_v1',

@@ -92,6 +92,17 @@ type Session struct {
 func StartSession(s Survey, id string) *Session {
 	return &Session{SurveyMeta: s.SurveyMeta, ID: id, Version: 1, Status: "in_progress", Answers: []AnswerValue{}}
 }
+
+// Copy isolates a pending change until its result snapshot has been stored.
+func (s Session) Copy() *Session {
+	s.Answers = slices.Clone(s.Answers)
+	s.flags = slices.Clone(s.flags)
+	if s.Result != nil {
+		ref := *s.Result
+		s.Result = &ref
+	}
+	return &s
+}
 func (s Session) Editable(version int) error {
 	if s.Version != version {
 		return Fail(Conflict, "SESSION_VERSION_CONFLICT")

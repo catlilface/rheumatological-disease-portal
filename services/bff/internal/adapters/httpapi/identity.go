@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"portal/bff/internal/application"
-	"portal/bff/internal/domain"
 )
 
 type credentials struct {
@@ -64,11 +63,15 @@ func (a *API) identity() {
 		return c.issue(201, l, e)
 	})
 	a.on("registerPatient", public, bind(func(c *call, x credentials) (any, error) {
-		if a.demoRegister == nil {
-			return nil, domain.NotFound()
-		}
-		l, e := a.demoRegister(c.id("Idempotency-Key"), x.Email, x.Password, x.Consent)
+		l, e := a.auth.Register(c.ctx, c.id("Idempotency-Key"), c.accessCookie, x.Email, x.Password, x.Consent)
 		return c.issue(201, l, e)
+	}))
+	a.on("setAccountRole", current, bind(func(c *call, x struct{ Email, Role string }) (any, error) {
+		if err := a.auth.SetRole(c.ctx, c.accessCookie, x.Email, x.Role); err != nil {
+			return nil, err
+		}
+		c.status = 204
+		return nil, nil
 	}))
 	a.on("signIn", public, bind(func(c *call, x credentials) (any, error) {
 		l, e := a.auth.SignIn(c.ctx, x.Email, x.Password)

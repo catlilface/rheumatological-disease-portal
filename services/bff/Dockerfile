@@ -12,6 +12,7 @@ RUN apk add --no-cache netcat-openbsd
 WORKDIR /app
 COPY contracts/http /app/contracts/http
 COPY --from=build /out/bff /usr/local/bin/bff
+RUN mkdir -p /var/lib/portal && chown 10001:10001 /var/lib/portal && chmod 700 /var/lib/portal
 USER 10001:10001
 EXPOSE 8000
 CMD ["bff"]

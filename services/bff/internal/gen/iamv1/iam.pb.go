@@ -193,6 +193,142 @@ func (x *SignInStaffRequest) GetPassword() string {
 	return ""
 }
 
+type RegisterPatientRequest struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	RequestId        string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Email            string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Password         string                 `protobuf:"bytes,3,opt,name=password,proto3" json:"password,omitempty"`
+	ConsentVersion   string                 `protobuf:"bytes,4,opt,name=consent_version,json=consentVersion,proto3" json:"consent_version,omitempty"`
+	GuestAccessToken string                 `protobuf:"bytes,5,opt,name=guest_access_token,json=guestAccessToken,proto3" json:"guest_access_token,omitempty"` // Optional proof to retain this guest's own history.
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RegisterPatientRequest) Reset() {
+	*x = RegisterPatientRequest{}
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterPatientRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterPatientRequest) ProtoMessage() {}
+
+func (x *RegisterPatientRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterPatientRequest.ProtoReflect.Descriptor instead.
+func (*RegisterPatientRequest) Descriptor() ([]byte, []int) {
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RegisterPatientRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *RegisterPatientRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *RegisterPatientRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+func (x *RegisterPatientRequest) GetConsentVersion() string {
+	if x != nil {
+		return x.ConsentVersion
+	}
+	return ""
+}
+
+func (x *RegisterPatientRequest) GetGuestAccessToken() string {
+	if x != nil {
+		return x.GuestAccessToken
+	}
+	return ""
+}
+
+type SetRoleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Role          UserRole               `protobuf:"varint,3,opt,name=role,proto3,enum=rheuma.iam.grpc.v1.UserRole" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetRoleRequest) Reset() {
+	*x = SetRoleRequest{}
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetRoleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetRoleRequest) ProtoMessage() {}
+
+func (x *SetRoleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetRoleRequest.ProtoReflect.Descriptor instead.
+func (*SetRoleRequest) Descriptor() ([]byte, []int) {
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SetRoleRequest) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *SetRoleRequest) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *SetRoleRequest) GetRole() UserRole {
+	if x != nil {
+		return x.Role
+	}
+	return UserRole_USER_ROLE_UNSPECIFIED
+}
+
 type RefreshTokensRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -203,7 +339,7 @@ type RefreshTokensRequest struct {
 
 func (x *RefreshTokensRequest) Reset() {
 	*x = RefreshTokensRequest{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[2]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -215,7 +351,7 @@ func (x *RefreshTokensRequest) String() string {
 func (*RefreshTokensRequest) ProtoMessage() {}
 
 func (x *RefreshTokensRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[2]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -228,7 +364,7 @@ func (x *RefreshTokensRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshTokensRequest.ProtoReflect.Descriptor instead.
 func (*RefreshTokensRequest) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{2}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RefreshTokensRequest) GetRequestId() string {
@@ -258,7 +394,7 @@ type TokenPair struct {
 
 func (x *TokenPair) Reset() {
 	*x = TokenPair{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[3]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -270,7 +406,7 @@ func (x *TokenPair) String() string {
 func (*TokenPair) ProtoMessage() {}
 
 func (x *TokenPair) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[3]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,7 +419,7 @@ func (x *TokenPair) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenPair.ProtoReflect.Descriptor instead.
 func (*TokenPair) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{3}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TokenPair) GetAccessToken() string {
@@ -332,7 +468,7 @@ type AuthenticateRequest struct {
 
 func (x *AuthenticateRequest) Reset() {
 	*x = AuthenticateRequest{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[4]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -344,7 +480,7 @@ func (x *AuthenticateRequest) String() string {
 func (*AuthenticateRequest) ProtoMessage() {}
 
 func (x *AuthenticateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[4]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -357,7 +493,7 @@ func (x *AuthenticateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthenticateRequest.ProtoReflect.Descriptor instead.
 func (*AuthenticateRequest) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{4}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *AuthenticateRequest) GetRequestId() string {
@@ -386,7 +522,7 @@ type Principal struct {
 
 func (x *Principal) Reset() {
 	*x = Principal{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[5]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -398,7 +534,7 @@ func (x *Principal) String() string {
 func (*Principal) ProtoMessage() {}
 
 func (x *Principal) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[5]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -411,7 +547,7 @@ func (x *Principal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Principal.ProtoReflect.Descriptor instead.
 func (*Principal) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{5}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Principal) GetActor() *commonv1.ActorContext {
@@ -450,13 +586,14 @@ type CheckAccessRequest struct {
 	Resource *commonv1.ResourceReference `protobuf:"bytes,3,opt,name=resource,proto3" json:"resource,omitempty"`
 	// Resolved by the trusted resource owner, never accepted from the browser.
 	ResourceOwnerSubjectId string `protobuf:"bytes,4,opt,name=resource_owner_subject_id,json=resourceOwnerSubjectId,proto3" json:"resource_owner_subject_id,omitempty"`
+	AccessToken            string `protobuf:"bytes,5,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"` // Current browser credential; identifiers alone never authorize reads.
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
 
 func (x *CheckAccessRequest) Reset() {
 	*x = CheckAccessRequest{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[6]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -468,7 +605,7 @@ func (x *CheckAccessRequest) String() string {
 func (*CheckAccessRequest) ProtoMessage() {}
 
 func (x *CheckAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[6]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -481,7 +618,7 @@ func (x *CheckAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckAccessRequest.ProtoReflect.Descriptor instead.
 func (*CheckAccessRequest) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{6}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CheckAccessRequest) GetContext() *commonv1.RequestContext {
@@ -512,6 +649,13 @@ func (x *CheckAccessRequest) GetResourceOwnerSubjectId() string {
 	return ""
 }
 
+func (x *CheckAccessRequest) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
 type AccessDecision struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	DecisionId string                 `protobuf:"bytes,1,opt,name=decision_id,json=decisionId,proto3" json:"decision_id,omitempty"`
@@ -527,7 +671,7 @@ type AccessDecision struct {
 
 func (x *AccessDecision) Reset() {
 	*x = AccessDecision{}
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[7]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -539,7 +683,7 @@ func (x *AccessDecision) String() string {
 func (*AccessDecision) ProtoMessage() {}
 
 func (x *AccessDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[7]
+	mi := &file_contracts_grpc_v1_iam_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -552,7 +696,7 @@ func (x *AccessDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccessDecision.ProtoReflect.Descriptor instead.
 func (*AccessDecision) Descriptor() ([]byte, []int) {
-	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{7}
+	return file_contracts_grpc_v1_iam_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AccessDecision) GetDecisionId() string {
@@ -603,7 +747,18 @@ const file_contracts_grpc_v1_iam_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1a\n" +
-	"\bpassword\x18\x03 \x01(\tR\bpassword\"Z\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\"\xc0\x01\n" +
+	"\x16RegisterPatientRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1a\n" +
+	"\bpassword\x18\x03 \x01(\tR\bpassword\x12'\n" +
+	"\x0fconsent_version\x18\x04 \x01(\tR\x0econsentVersion\x12,\n" +
+	"\x12guest_access_token\x18\x05 \x01(\tR\x10guestAccessToken\"{\n" +
+	"\x0eSetRoleRequest\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x120\n" +
+	"\x04role\x18\x03 \x01(\x0e2\x1c.rheuma.iam.grpc.v1.UserRoleR\x04role\"Z\n" +
 	"\x14RefreshTokensRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12#\n" +
@@ -622,12 +777,13 @@ const file_contracts_grpc_v1_iam_proto_rawDesc = "" +
 	"\x05actor\x18\x01 \x01(\v2\x1e.rheuma.common.v1.ActorContextR\x05actor\x12\x19\n" +
 	"\bis_guest\x18\x02 \x01(\bR\aisGuest\x122\n" +
 	"\x05roles\x18\x03 \x03(\x0e2\x1c.rheuma.iam.grpc.v1.UserRoleR\x05roles\x12H\n" +
-	"\x12session_expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x10sessionExpiresAt\"\xe4\x01\n" +
+	"\x12session_expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x10sessionExpiresAt\"\x87\x02\n" +
 	"\x12CheckAccessRequest\x12:\n" +
 	"\acontext\x18\x01 \x01(\v2 .rheuma.common.v1.RequestContextR\acontext\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12?\n" +
 	"\bresource\x18\x03 \x01(\v2#.rheuma.common.v1.ResourceReferenceR\bresource\x129\n" +
-	"\x19resource_owner_subject_id\x18\x04 \x01(\tR\x16resourceOwnerSubjectId\"\xe6\x01\n" +
+	"\x19resource_owner_subject_id\x18\x04 \x01(\tR\x16resourceOwnerSubjectId\x12!\n" +
+	"\faccess_token\x18\x05 \x01(\tR\vaccessToken\"\xe6\x01\n" +
 	"\x0eAccessDecision\x12\x1f\n" +
 	"\vdecision_id\x18\x01 \x01(\tR\n" +
 	"decisionId\x12\x18\n" +
@@ -641,10 +797,12 @@ const file_contracts_grpc_v1_iam_proto_rawDesc = "" +
 	"\x15USER_ROLE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11USER_ROLE_PATIENT\x10\x01\x12\x13\n" +
 	"\x0fUSER_ROLE_ADMIN\x10\x02\x12\x14\n" +
-	"\x10USER_ROLE_EDITOR\x10\x032\xa2\x04\n" +
+	"\x10USER_ROLE_EDITOR\x10\x032\xc7\x05\n" +
 	"\n" +
 	"IamService\x12b\n" +
-	"\x12CreateGuestSession\x12-.rheuma.iam.grpc.v1.CreateGuestSessionRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12T\n" +
+	"\x12CreateGuestSession\x12-.rheuma.iam.grpc.v1.CreateGuestSessionRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12\\\n" +
+	"\x0fRegisterPatient\x12*.rheuma.iam.grpc.v1.RegisterPatientRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12E\n" +
+	"\aSetRole\x12\".rheuma.iam.grpc.v1.SetRoleRequest\x1a\x16.google.protobuf.Empty\x12T\n" +
 	"\vSignInStaff\x12&.rheuma.iam.grpc.v1.SignInStaffRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12X\n" +
 	"\rRefreshTokens\x12(.rheuma.iam.grpc.v1.RefreshTokensRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12V\n" +
 	"\fAuthenticate\x12'.rheuma.iam.grpc.v1.AuthenticateRequest\x1a\x1d.rheuma.iam.grpc.v1.Principal\x12Y\n" +
@@ -665,51 +823,58 @@ func file_contracts_grpc_v1_iam_proto_rawDescGZIP() []byte {
 }
 
 var file_contracts_grpc_v1_iam_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_contracts_grpc_v1_iam_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_contracts_grpc_v1_iam_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_contracts_grpc_v1_iam_proto_goTypes = []any{
 	(UserRole)(0),                      // 0: rheuma.iam.grpc.v1.UserRole
 	(*CreateGuestSessionRequest)(nil),  // 1: rheuma.iam.grpc.v1.CreateGuestSessionRequest
 	(*SignInStaffRequest)(nil),         // 2: rheuma.iam.grpc.v1.SignInStaffRequest
-	(*RefreshTokensRequest)(nil),       // 3: rheuma.iam.grpc.v1.RefreshTokensRequest
-	(*TokenPair)(nil),                  // 4: rheuma.iam.grpc.v1.TokenPair
-	(*AuthenticateRequest)(nil),        // 5: rheuma.iam.grpc.v1.AuthenticateRequest
-	(*Principal)(nil),                  // 6: rheuma.iam.grpc.v1.Principal
-	(*CheckAccessRequest)(nil),         // 7: rheuma.iam.grpc.v1.CheckAccessRequest
-	(*AccessDecision)(nil),             // 8: rheuma.iam.grpc.v1.AccessDecision
-	(*timestamppb.Timestamp)(nil),      // 9: google.protobuf.Timestamp
-	(*commonv1.ActorContext)(nil),      // 10: rheuma.common.v1.ActorContext
-	(*commonv1.RequestContext)(nil),    // 11: rheuma.common.v1.RequestContext
-	(*commonv1.ResourceReference)(nil), // 12: rheuma.common.v1.ResourceReference
-	(*emptypb.Empty)(nil),              // 13: google.protobuf.Empty
+	(*RegisterPatientRequest)(nil),     // 3: rheuma.iam.grpc.v1.RegisterPatientRequest
+	(*SetRoleRequest)(nil),             // 4: rheuma.iam.grpc.v1.SetRoleRequest
+	(*RefreshTokensRequest)(nil),       // 5: rheuma.iam.grpc.v1.RefreshTokensRequest
+	(*TokenPair)(nil),                  // 6: rheuma.iam.grpc.v1.TokenPair
+	(*AuthenticateRequest)(nil),        // 7: rheuma.iam.grpc.v1.AuthenticateRequest
+	(*Principal)(nil),                  // 8: rheuma.iam.grpc.v1.Principal
+	(*CheckAccessRequest)(nil),         // 9: rheuma.iam.grpc.v1.CheckAccessRequest
+	(*AccessDecision)(nil),             // 10: rheuma.iam.grpc.v1.AccessDecision
+	(*timestamppb.Timestamp)(nil),      // 11: google.protobuf.Timestamp
+	(*commonv1.ActorContext)(nil),      // 12: rheuma.common.v1.ActorContext
+	(*commonv1.RequestContext)(nil),    // 13: rheuma.common.v1.RequestContext
+	(*commonv1.ResourceReference)(nil), // 14: rheuma.common.v1.ResourceReference
+	(*emptypb.Empty)(nil),              // 15: google.protobuf.Empty
 }
 var file_contracts_grpc_v1_iam_proto_depIdxs = []int32{
-	9,  // 0: rheuma.iam.grpc.v1.TokenPair.access_expires_at:type_name -> google.protobuf.Timestamp
-	9,  // 1: rheuma.iam.grpc.v1.TokenPair.refresh_expires_at:type_name -> google.protobuf.Timestamp
-	6,  // 2: rheuma.iam.grpc.v1.TokenPair.principal:type_name -> rheuma.iam.grpc.v1.Principal
-	10, // 3: rheuma.iam.grpc.v1.Principal.actor:type_name -> rheuma.common.v1.ActorContext
-	0,  // 4: rheuma.iam.grpc.v1.Principal.roles:type_name -> rheuma.iam.grpc.v1.UserRole
-	9,  // 5: rheuma.iam.grpc.v1.Principal.session_expires_at:type_name -> google.protobuf.Timestamp
-	11, // 6: rheuma.iam.grpc.v1.CheckAccessRequest.context:type_name -> rheuma.common.v1.RequestContext
-	12, // 7: rheuma.iam.grpc.v1.CheckAccessRequest.resource:type_name -> rheuma.common.v1.ResourceReference
-	9,  // 8: rheuma.iam.grpc.v1.AccessDecision.evaluated_at:type_name -> google.protobuf.Timestamp
-	9,  // 9: rheuma.iam.grpc.v1.AccessDecision.expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 10: rheuma.iam.grpc.v1.IamService.CreateGuestSession:input_type -> rheuma.iam.grpc.v1.CreateGuestSessionRequest
-	2,  // 11: rheuma.iam.grpc.v1.IamService.SignInStaff:input_type -> rheuma.iam.grpc.v1.SignInStaffRequest
-	3,  // 12: rheuma.iam.grpc.v1.IamService.RefreshTokens:input_type -> rheuma.iam.grpc.v1.RefreshTokensRequest
-	5,  // 13: rheuma.iam.grpc.v1.IamService.Authenticate:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
-	7,  // 14: rheuma.iam.grpc.v1.IamService.CheckAccess:input_type -> rheuma.iam.grpc.v1.CheckAccessRequest
-	5,  // 15: rheuma.iam.grpc.v1.IamService.EndSession:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
-	4,  // 16: rheuma.iam.grpc.v1.IamService.CreateGuestSession:output_type -> rheuma.iam.grpc.v1.TokenPair
-	4,  // 17: rheuma.iam.grpc.v1.IamService.SignInStaff:output_type -> rheuma.iam.grpc.v1.TokenPair
-	4,  // 18: rheuma.iam.grpc.v1.IamService.RefreshTokens:output_type -> rheuma.iam.grpc.v1.TokenPair
-	6,  // 19: rheuma.iam.grpc.v1.IamService.Authenticate:output_type -> rheuma.iam.grpc.v1.Principal
-	8,  // 20: rheuma.iam.grpc.v1.IamService.CheckAccess:output_type -> rheuma.iam.grpc.v1.AccessDecision
-	13, // 21: rheuma.iam.grpc.v1.IamService.EndSession:output_type -> google.protobuf.Empty
-	16, // [16:22] is the sub-list for method output_type
-	10, // [10:16] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	0,  // 0: rheuma.iam.grpc.v1.SetRoleRequest.role:type_name -> rheuma.iam.grpc.v1.UserRole
+	11, // 1: rheuma.iam.grpc.v1.TokenPair.access_expires_at:type_name -> google.protobuf.Timestamp
+	11, // 2: rheuma.iam.grpc.v1.TokenPair.refresh_expires_at:type_name -> google.protobuf.Timestamp
+	8,  // 3: rheuma.iam.grpc.v1.TokenPair.principal:type_name -> rheuma.iam.grpc.v1.Principal
+	12, // 4: rheuma.iam.grpc.v1.Principal.actor:type_name -> rheuma.common.v1.ActorContext
+	0,  // 5: rheuma.iam.grpc.v1.Principal.roles:type_name -> rheuma.iam.grpc.v1.UserRole
+	11, // 6: rheuma.iam.grpc.v1.Principal.session_expires_at:type_name -> google.protobuf.Timestamp
+	13, // 7: rheuma.iam.grpc.v1.CheckAccessRequest.context:type_name -> rheuma.common.v1.RequestContext
+	14, // 8: rheuma.iam.grpc.v1.CheckAccessRequest.resource:type_name -> rheuma.common.v1.ResourceReference
+	11, // 9: rheuma.iam.grpc.v1.AccessDecision.evaluated_at:type_name -> google.protobuf.Timestamp
+	11, // 10: rheuma.iam.grpc.v1.AccessDecision.expires_at:type_name -> google.protobuf.Timestamp
+	1,  // 11: rheuma.iam.grpc.v1.IamService.CreateGuestSession:input_type -> rheuma.iam.grpc.v1.CreateGuestSessionRequest
+	3,  // 12: rheuma.iam.grpc.v1.IamService.RegisterPatient:input_type -> rheuma.iam.grpc.v1.RegisterPatientRequest
+	4,  // 13: rheuma.iam.grpc.v1.IamService.SetRole:input_type -> rheuma.iam.grpc.v1.SetRoleRequest
+	2,  // 14: rheuma.iam.grpc.v1.IamService.SignInStaff:input_type -> rheuma.iam.grpc.v1.SignInStaffRequest
+	5,  // 15: rheuma.iam.grpc.v1.IamService.RefreshTokens:input_type -> rheuma.iam.grpc.v1.RefreshTokensRequest
+	7,  // 16: rheuma.iam.grpc.v1.IamService.Authenticate:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
+	9,  // 17: rheuma.iam.grpc.v1.IamService.CheckAccess:input_type -> rheuma.iam.grpc.v1.CheckAccessRequest
+	7,  // 18: rheuma.iam.grpc.v1.IamService.EndSession:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
+	6,  // 19: rheuma.iam.grpc.v1.IamService.CreateGuestSession:output_type -> rheuma.iam.grpc.v1.TokenPair
+	6,  // 20: rheuma.iam.grpc.v1.IamService.RegisterPatient:output_type -> rheuma.iam.grpc.v1.TokenPair
+	15, // 21: rheuma.iam.grpc.v1.IamService.SetRole:output_type -> google.protobuf.Empty
+	6,  // 22: rheuma.iam.grpc.v1.IamService.SignInStaff:output_type -> rheuma.iam.grpc.v1.TokenPair
+	6,  // 23: rheuma.iam.grpc.v1.IamService.RefreshTokens:output_type -> rheuma.iam.grpc.v1.TokenPair
+	8,  // 24: rheuma.iam.grpc.v1.IamService.Authenticate:output_type -> rheuma.iam.grpc.v1.Principal
+	10, // 25: rheuma.iam.grpc.v1.IamService.CheckAccess:output_type -> rheuma.iam.grpc.v1.AccessDecision
+	15, // 26: rheuma.iam.grpc.v1.IamService.EndSession:output_type -> google.protobuf.Empty
+	19, // [19:27] is the sub-list for method output_type
+	11, // [11:19] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_contracts_grpc_v1_iam_proto_init() }
@@ -723,7 +888,7 @@ func file_contracts_grpc_v1_iam_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_contracts_grpc_v1_iam_proto_rawDesc), len(file_contracts_grpc_v1_iam_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

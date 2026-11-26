@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 
 import {
   AboutPage,
+  CabinetPage,
   ArticlePage,
   DoctorPage,
   DocumentsPage,
@@ -44,6 +45,15 @@ export default function App() {
             element={
               <PageContent>
                 <HomePage />
+              </PageContent>
+            }
+          />
+          <Route
+            path="cabinet"
+            caseSensitive
+            element={
+              <PageContent title="nav.cabinet">
+                <CabinetPage />
               </PageContent>
             }
           />

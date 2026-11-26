@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths: &build-paths
       - "services/**"
+      - "frontend/src/pages/cabinet/**"
+      - "frontend/src/shared/api/**"
+      - "frontend/tests/integration/patient.mjs"
       - "packages/service-runtime/**"
       - "contracts/**"
       - "infra/db/**"
@@ -46,8 +49,15 @@ jobs:
       - run: make up
       - name: Verify IAM sessions against PostgreSQL and through the BFF
         run: |
-          docker compose exec -T iam python -m unittest -v service.tests.test_sessions service.tests.test_bff
+          docker compose exec -T iam python -m unittest -v service.tests.test_policy service.tests.test_sessions service.tests.test_bff
+          docker compose run --rm --no-deps -v "$PWD/.secrets/portal-tls-v2/bff:/run/test-bff-tls:ro" screening python -m unittest -v service.tests.transport_e2e
           python3 infra/k8s/check-http.py http://127.0.0.1:8000
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Patient journey in Chrome against the running portal
+        working-directory: frontend
+        run: npm ci && npm run test:patient-e2e
       - name: Check gRPC contracts, Kafka commands and BFF isolation
         run: bash infra/check-transport.sh compose
       - name: Check persistence after storage restart

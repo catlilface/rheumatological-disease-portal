@@ -59,9 +59,19 @@ services:
       edge:
         aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
       rpc:
-    volumes: ["${MIS_SECRET_DIR:-./.secrets}/iam-tls/bff:/run/iam-tls:ro"]
-    env_file:
-      - .env
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/bff:/run/iam-tls:ro
+      - patient_archive:/var/lib/portal
+    environment:
+      APP_NAME: ${APP_NAME}
+      DEBUG: ${DEBUG}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      CORS__ALLOW_ORIGINS: ${CORS__ALLOW_ORIGINS}
+      CORS__ALLOW_METHODS: ${CORS__ALLOW_METHODS}
+      CORS__ALLOW_HEADERS: ${CORS__ALLOW_HEADERS}
+      CORS__ALLOW_CREDENTIALS: ${CORS__ALLOW_CREDENTIALS}
+      CORS__EXPOSE_HEADERS: ${CORS__EXPOSE_HEADERS}
+      CORS__MAX_AGE: ${CORS__MAX_AGE}
     healthcheck:
       <<: *health
       test: [CMD, wget, -q, -T, "4", -O, /dev/null, http://127.0.0.1:8000/health]
@@ -69,11 +79,15 @@ services:
   iam:
     <<: *grpc
     image: rdp-iam:mvp
+    environment:
+      PGHOST: postgres
+      IAM_ADMIN_EMAIL: ${IAM_ADMIN_EMAIL:-}
+      IAM_ADMIN_PASSWORD: ${IAM_ADMIN_PASSWORD:-}
     build: {<<: *build, args: {SERVICE: iam}}
     volumes:
       - ${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro
       - ${MIS_SECRET_DIR:-./.secrets}/iam-key:/run/secrets/iam-key:ro
-      - ${MIS_SECRET_DIR:-./.secrets}/iam-tls/iam:/run/iam-tls:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/iam:/run/iam-tls:ro
     healthcheck:
       <<: *health
       test: [CMD, python, -c, "import socket; socket.create_connection(('localhost',50051),3).close()"]
@@ -92,7 +106,9 @@ services:
     <<: *worker
     image: rdp-screening:mvp
     build: {<<: *build, args: {SERVICE: screening}}
-    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro"]
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/screening:/run/iam-tls:ro
 
   content:
     <<: *worker
@@ -208,6 +224,7 @@ networks:
   vectors:
     internal: true
 volumes:
+  patient_archive:
   kafka-data:
   postgres-data:
   objects-data:

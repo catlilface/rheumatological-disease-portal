@@ -1,4 +1,5 @@
 """Run against a migrated disposable mis_iam database, not a live installation."""
+from contextlib import contextmanager, closing
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 import secrets
@@ -8,6 +9,7 @@ from uuid import uuid4, uuid7
 from grpc import StatusCode
 from contracts.grpc.v1 import iam_pb2 as api
 
+from .fixtures import staff_fixture
 from ..sessions import Authority, Denied, connect_db
 
 
@@ -78,10 +80,13 @@ class Sessions(unittest.TestCase):
 
     def test_decision_binds_actor_session_action_and_owner(self):
         a, b = self.guest(), self.guest()
-        check = api.CheckAccessRequest(action='getOperation', resource_owner_subject_id=a.principal.actor.subject_id)
+        check = api.CheckAccessRequest(access_token=a.access_token, action='getOperation', resource_owner_subject_id=a.principal.actor.subject_id)
         check.context.actor.CopyFrom(a.principal.actor)
         check.resource.resource_type = 'operation'
         check.resource.resource_id = str(uuid7())
+        check.access_token = b.access_token
+        self.assertFalse(self.iam.check(check).allowed)
+        check.access_token = a.access_token
         decision = self.iam.check(check)
         self.assertTrue(decision.allowed)
         self.assertEqual(decision.expires_at.ToDatetime(UTC), self.now + timedelta(seconds=5))
@@ -97,9 +102,50 @@ class Sessions(unittest.TestCase):
         check.action = 'getOperation'
         self.assertEqual(self.iam.check(check).reason_code, 'ACCESS_REVOKED')
 
+    def test_registration_role_change_requires_admin_and_revokes_sessions(self):
+        req = api.RegisterPatientRequest(request_id=str(uuid4()), email=f'{uuid4()}@example.test', password='test-only-password', consent_version='demo-medical-v1')
+        guest = self.guest()
+        req.guest_access_token = guest.access_token
+        patient = self.iam.register(req)
+        self.assertEqual(patient.principal.actor.subject_id, guest.principal.actor.subject_id)
+        self.denied(self.iam.authenticate, guest.access_token)
+        self.denied(self.iam.rotate, guest.refresh_token)
+        self.assertEqual(list(patient.principal.roles), [api.USER_ROLE_PATIENT])
+        self.assertEqual(self.iam.register(req), patient)
+        retry = api.RegisterPatientRequest()
+        retry.CopyFrom(req)
+        retry.password = 'different-password'
+        self.denied(self.iam.register, retry, status=StatusCode.FAILED_PRECONDITION)
+        retry.request_id, retry.guest_access_token = str(uuid4()), ''
+        self.denied(self.iam.register, retry, status=StatusCode.ALREADY_EXISTS)
+        role = api.SetRoleRequest(email=req.email, role=api.USER_ROLE_EDITOR, access_token=patient.access_token)
+        self.denied(self.iam.set_role, role, status=StatusCode.PERMISSION_DENIED)
+        email = f'{uuid4()}@example.test'
+        staff_fixture(self.iam, email, req.password, 'admin')
+        role.access_token = self.iam.sign_in(email, req.password).access_token
+        self.iam.set_role(role)
+        self.denied(self.iam.authenticate, patient.access_token)
+        self.denied(self.iam.rotate, patient.refresh_token)
+        self.assertEqual(list(self.iam.sign_in(req.email, req.password).principal.roles), [api.USER_ROLE_EDITOR])
+
+    def test_bootstrap_is_once_only(self):
+        # Keep the installation marker and any pre-existing admin untouched.
+        with closing(connect_db()) as db:
+            @contextmanager
+            def transaction():
+                yield db.cursor()
+            self.iam.transaction = transaction
+            db.cursor().execute('DELETE FROM admin_bootstrap')
+            db.cursor().execute("DELETE FROM principal_roles WHERE role_id IN (SELECT id FROM roles WHERE code='admin')")
+            first, second = (f'{uuid4()}@example.test' for _ in range(2))
+            self.iam.bootstrap(first, 'test-bootstrap-password')
+            self.iam.bootstrap(second, 'test-bootstrap-password')
+            self.assertEqual(list(self.iam.sign_in(first, 'test-bootstrap-password').principal.roles), [api.USER_ROLE_ADMIN])
+            self.denied(self.iam.sign_in, second, 'test-bootstrap-password')
+
     def test_unblocking_does_not_revive_a_family(self):
         email = f'{uuid4()}@example.test'
-        self.iam.provision(email, 'synthetic-password', 'admin')
+        staff_fixture(self.iam, email, 'synthetic-password', 'admin')
         a = self.iam.sign_in(email, 'synthetic-password')
         with self.iam.transaction() as db:
             db.execute('UPDATE principals SET blocked_at=now() WHERE id=%s', (a.principal.actor.subject_id,))
@@ -111,7 +157,7 @@ class Sessions(unittest.TestCase):
 
     def test_staff_logout_does_not_revoke_other_device(self):
         email = f'{uuid4()}@example.test'
-        self.iam.provision(email, 'synthetic-password', 'editor')
+        staff_fixture(self.iam, email, 'synthetic-password', 'editor')
         self.denied(self.iam.sign_in, email, 'wrong')
         self.denied(self.iam.sign_in, 'absent@example.test', 'wrong')
         a = self.iam.sign_in(email.upper(), 'synthetic-password')

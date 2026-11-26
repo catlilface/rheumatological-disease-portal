@@ -20,6 +20,9 @@ export default function SiteHeader() {
           <NavLink to="/doctor" end caseSensitive>
             {t('nav.doctor')}
           </NavLink>
+          <NavLink to="/cabinet" end caseSensitive>
+            {t('nav.cabinet')}
+          </NavLink>
           <NavLink to="/documents" end caseSensitive>
             {t('nav.documents')}
           </NavLink>

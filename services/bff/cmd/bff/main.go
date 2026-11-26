@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"portal/bff/internal/adapters/archive"
 	"portal/bff/internal/adapters/fixtures"
 	"portal/bff/internal/adapters/httpapi"
 	"portal/bff/internal/adapters/iam"
@@ -27,7 +28,7 @@ import (
 )
 
 // Composition root: no service locators, global settings or adapter imports in the core.
-func build(root string, cfg config.Settings, identity httpapi.Identity, demo httpapi.DemoRegistration) (http.Handler, error) {
+func build(root string, cfg config.Settings, identity httpapi.Identity, demo httpapi.DemoRegistration, db *archive.Store) (http.Handler, error) {
 	catalog, err := fixtures.Load()
 	if err != nil {
 		return nil, err
@@ -54,9 +55,14 @@ func build(root string, cfg config.Settings, identity httpapi.Identity, demo htt
 		Sessions:          memory.New[app.OwnedID, *domain.Session](), Results: memory.New[app.OwnedResult, domain.Result](),
 		Explanations: memory.New[app.OwnedResult, app.Explanation](),
 	}
+	cabinets := app.Cabinets{Runtime: rt, Records: memory.New[string, *domain.Cabinet]()}
+	if db != nil {
+		s.Archive = db
+		cabinets.Archive = db
+	}
 	api.Screening(s)
 	api.Content(content)
-	api.Cabinet(app.Cabinets{Runtime: rt, Records: memory.New[string, *domain.Cabinet]()})
+	api.Cabinet(cabinets)
 	api.Community(app.NewCommunity(rt))
 	api.Reports(app.Reports{Runtime: rt, Results: s,
 		Records: memory.New[app.OwnedID, domain.Report](), Shares: memory.New[app.ShareKey, *domain.Grant](),
@@ -87,7 +93,19 @@ func run(factory identityFactory) error {
 	if err != nil {
 		return err
 	}
-	handler, err := build(root, cfg, identity, demo)
+	var db *archive.Store
+	if demo == nil {
+		path := os.Getenv("PORTAL_ARCHIVE_PATH")
+		if path == "" {
+			path = "/var/lib/portal/patients.db"
+		}
+		db, err = archive.Open(path)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+	}
+	handler, err := build(root, cfg, identity, demo, db)
 	if err != nil {
 		return err
 	}

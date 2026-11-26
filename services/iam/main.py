@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from pathlib import Path
+import os
 import signal
 import threading
 
@@ -18,10 +19,11 @@ def authority():
     return Authority(connect_db, bytes.fromhex(Path('/run/secrets/iam-key').read_text().strip()))
 
 
-def bff_only(method):
+def service_authorized(method):
     @wraps(method)
     def call(self, request, context):
-        if context.auth_context().get('x509_common_name') != [b'bff']:
+        caller = context.auth_context().get('x509_common_name')
+        if caller != [b'bff'] and not (caller == [b'screening'] and method.__name__ == 'Authenticate'):
             context.abort(grpc.StatusCode.PERMISSION_DENIED, 'Service not authorized')
         try:
             return method(self, request)
@@ -38,28 +40,37 @@ class IAM(rpc.IamServiceServicer):
     def __init__(self, sessions):
         self.sessions = sessions
 
-    @bff_only
+    @service_authorized
     def CreateGuestSession(self, req):
         return self.sessions.guest(req.request_id, req.access_token)
 
-    @bff_only
+    @service_authorized
+    def RegisterPatient(self, req):
+        return self.sessions.register(req)
+
+    @service_authorized
+    def SetRole(self, req):
+        self.sessions.set_role(req)
+        return Empty()
+
+    @service_authorized
     def SignInStaff(self, req):
         return self.sessions.sign_in(req.email, req.password)
 
-    @bff_only
+    @service_authorized
     def RefreshTokens(self, req):
         return self.sessions.rotate(req.refresh_token)
 
-    @bff_only
+    @service_authorized
     def Authenticate(self, req):
         return self.sessions.authenticate(req.access_token)
 
-    @bff_only
+    @service_authorized
     def EndSession(self, req):
         self.sessions.end(req.access_token)
         return Empty()
 
-    @bff_only
+    @service_authorized
     def CheckAccess(self, req):
         return self.sessions.check(req)
 
@@ -69,6 +80,7 @@ def main():
     creds = grpc.ssl_server_credentials([((tls/'tls.key').read_bytes(), (tls/'tls.crt').read_bytes())],
                                         root_certificates=(tls/'ca.crt').read_bytes(), require_client_auth=True)
     sessions = authority()
+    sessions.bootstrap(os.getenv('IAM_ADMIN_EMAIL', ''), os.getenv('IAM_ADMIN_PASSWORD', ''))
     with sessions.transaction() as cur:
         cur.execute('SELECT token_hash FROM session_refresh_tokens LIMIT 0')
     server = grpc.server(ThreadPoolExecutor(max_workers=8), maximum_concurrent_rpcs=32,

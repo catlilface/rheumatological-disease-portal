@@ -30,6 +30,7 @@ spec:
         ports:
         - containerPort: 50051
         volumeMounts:
+        - {name: tls, mountPath: /run/iam-tls, readOnly: true}
         - {name: database, mountPath: /run/secrets, readOnly: true}
         env:
         - {name: PGHOST, value: postgres}
@@ -41,6 +42,8 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 8
       volumes:
+      - name: tls
+        secret: {secretName: portal-tls-v2-screening}
       - name: database
         secret:
           secretName: db-app-screening

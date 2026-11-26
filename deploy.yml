@@ -51,8 +51,19 @@ services:
       edge:
         aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
       rpc:
-    env_file:
-      - .env
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/bff:/run/iam-tls:ro
+      - patient_archive:/var/lib/portal
+    environment:
+      APP_NAME: ${APP_NAME}
+      DEBUG: ${DEBUG}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
+      CORS__ALLOW_ORIGINS: ${CORS__ALLOW_ORIGINS}
+      CORS__ALLOW_METHODS: ${CORS__ALLOW_METHODS}
+      CORS__ALLOW_HEADERS: ${CORS__ALLOW_HEADERS}
+      CORS__ALLOW_CREDENTIALS: ${CORS__ALLOW_CREDENTIALS}
+      CORS__EXPOSE_HEADERS: ${CORS__EXPOSE_HEADERS}
+      CORS__MAX_AGE: ${CORS__MAX_AGE}
     healthcheck:
       <<: *health
       test: [CMD, wget, -q, -T, "4", -O, /dev/null, http://127.0.0.1:8000/health]
@@ -60,7 +71,14 @@ services:
   iam:
     <<: *grpc
     image: ghcr.io/catlilface/rheumatology-portal-iam:${TAG_NAME:?Set TAG_NAME}
-    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro"]
+    environment:
+      PGHOST: postgres
+      IAM_ADMIN_EMAIL: ${IAM_ADMIN_EMAIL:-}
+      IAM_ADMIN_PASSWORD: ${IAM_ADMIN_PASSWORD:-}
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/iam-key:/run/secrets/iam-key:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/iam:/run/iam-tls:ro
 
   files:
     <<: *grpc
@@ -74,7 +92,9 @@ services:
   screening:
     <<: *worker
     image: ghcr.io/catlilface/rheumatology-portal-screening:${TAG_NAME:?Set TAG_NAME}
-    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro"]
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/screening:/run/iam-tls:ro
 
   content:
     <<: *worker
@@ -187,6 +207,7 @@ networks:
   vectors:
     internal: true
 volumes:
+  patient_archive:
   kafka-data:
   postgres-data:
   objects-data:

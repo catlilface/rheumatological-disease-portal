@@ -9,6 +9,8 @@ import (
 // Inbound ports are defined by the adapter that consumes them. In particular,
 // an HTTP handler gets session and command use cases, not their repositories.
 type Identity interface {
+	Register(ctx context.Context, key, access, email, password string, consent application.MedicalConsent) (*application.Login, error)
+	SetRole(ctx context.Context, access, email, role string) error
 	Session(context.Context, string) (*application.Login, error)
 	Guest(ctx context.Context, key, cookie string) (*application.Login, error)
 	SignIn(ctx context.Context, email, password string) (*application.Login, error)
@@ -21,6 +23,7 @@ type Operations interface {
 	Get(*domain.Actor, string, string) (domain.Operation, error)
 }
 type Screenings interface {
+	History(string, domain.Window) (domain.Page[domain.Result], error)
 	Survey(id string, weightsVersion *string) (domain.Survey, error)
 	Start(string, application.Start) ([]domain.Resource, error)
 	Get(application.OwnedID) (*domain.Session, error)

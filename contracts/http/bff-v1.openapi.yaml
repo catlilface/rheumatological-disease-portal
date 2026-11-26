@@ -136,7 +136,21 @@ paths:
         '200': {description: Действующая редакция, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Policy'}}}}
         '400': *host400
         '500': *internal500
-  # Future/demo routes are not mounted in the IAM-backed MVP.
+  /admin/account-role:
+    put:
+      tags: [Сессии и согласие]
+      operationId: setAccountRole
+      summary: Назначить роль зарегистрированному пользователю (только admin)
+      parameters: [*csrf]
+      requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/RoleAssignment'}}}}
+      responses:
+        '204': {description: Роль назначена; сессии пользователя отозваны}
+        '401': *session401
+        '400': *write400
+        '403': {description: Требуется admin или отклонена CSRF-проверка, content: *errorBody}
+        '404': {description: Учётная запись не найдена, content: *errorBody}
+        '422': {description: Недопустимое назначение роли, content: *errorBody}
+        '503': *iam503
   /auth/registrations:
     post:
       tags: [Сессии и согласие]
@@ -170,7 +184,7 @@ paths:
       tags: [Сессии и согласие]
       operationId: signIn
       summary: Войти
-      description: Проверяет адрес электронной почты и пароль заранее созданного editor/admin и устанавливает новые cookie сессии. При неверных данных возвращает `401`.
+      description: Проверяет адрес электронной почты и пароль зарегистрированного пользователя и устанавливает новые cookie сессии. При неверных данных возвращает `401`.
       security: []
       parameters: [*csrf]
       requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Credentials'}}}}
@@ -468,6 +482,20 @@ paths:
         '200': {description: Опубликованный маршрут и подготовка к приёму, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DoctorRoute'}}}}
         '400': *host400
         '500': *internal500
+  /me/screening-results:
+    get:
+      tags: [Кабинет и дневник]
+      operationId: listScreeningResults
+      summary: Все версии собственных результатов скрининга
+      parameters: [*limit, *offset]
+      responses:
+        '200': {description: Страница собственных результатов, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ScreeningResultPage'}}}}
+        '401': *session401
+        '400': *host400
+        '403': *patient403
+        '404': *notOwned404
+        '422': *page422
+        '503': *iam503
   /me/onboarding:
     get:
       tags: [Кабинет и дневник]

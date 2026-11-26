@@ -39,6 +39,10 @@ func (d demoAuth) Revoke(_ context.Context, token string) error {
 	}
 	return err
 }
+func (d demoAuth) Register(_ context.Context, key, _, email, password string, consent app.MedicalConsent) (*app.Login, error) {
+	return d.s.Register(key, email, password, consent)
+}
+func (d demoAuth) SetRole(context.Context, string, string, string) error { return domain.NotFound() }
 func (d demoAuth) Check(context.Context, *app.Login, string, domain.Resource, string) error {
 	panic("not an IAM client")
 }
@@ -48,7 +52,7 @@ func demo(cfg config.Settings) (httpapi.Identity, httpapi.DemoRegistration, erro
 }
 func buildDemo(root string, cfg config.Settings) (http.Handler, error) {
 	auth, reg, _ := demo(cfg)
-	return build(root, cfg, auth, reg)
+	return build(root, cfg, auth, reg, nil)
 }
 func TestMain(m *testing.M) {
 	if os.Getenv("BFF_CONTRACT_TEST_SERVER") == "1" {

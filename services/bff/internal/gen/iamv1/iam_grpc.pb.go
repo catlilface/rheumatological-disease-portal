@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	IamService_CreateGuestSession_FullMethodName = "/rheuma.iam.grpc.v1.IamService/CreateGuestSession"
+	IamService_RegisterPatient_FullMethodName    = "/rheuma.iam.grpc.v1.IamService/RegisterPatient"
+	IamService_SetRole_FullMethodName            = "/rheuma.iam.grpc.v1.IamService/SetRole"
 	IamService_SignInStaff_FullMethodName        = "/rheuma.iam.grpc.v1.IamService/SignInStaff"
 	IamService_RefreshTokens_FullMethodName      = "/rheuma.iam.grpc.v1.IamService/RefreshTokens"
 	IamService_Authenticate_FullMethodName       = "/rheuma.iam.grpc.v1.IamService/Authenticate"
@@ -36,7 +38,9 @@ const (
 // These calls require authenticated service transport. Never log token payloads.
 type IamServiceClient interface {
 	CreateGuestSession(ctx context.Context, in *CreateGuestSessionRequest, opts ...grpc.CallOption) (*TokenPair, error)
-	// Initial login for provisioned admins/editors, not registration.
+	// Password login for registered accounts (legacy RPC name).
+	RegisterPatient(ctx context.Context, in *RegisterPatientRequest, opts ...grpc.CallOption) (*TokenPair, error)
+	SetRole(ctx context.Context, in *SetRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SignInStaff(ctx context.Context, in *SignInStaffRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	RefreshTokens(ctx context.Context, in *RefreshTokensRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*Principal, error)
@@ -57,6 +61,26 @@ func (c *iamServiceClient) CreateGuestSession(ctx context.Context, in *CreateGue
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TokenPair)
 	err := c.cc.Invoke(ctx, IamService_CreateGuestSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iamServiceClient) RegisterPatient(ctx context.Context, in *RegisterPatientRequest, opts ...grpc.CallOption) (*TokenPair, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TokenPair)
+	err := c.cc.Invoke(ctx, IamService_RegisterPatient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iamServiceClient) SetRole(ctx context.Context, in *SetRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, IamService_SetRole_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +145,9 @@ func (c *iamServiceClient) EndSession(ctx context.Context, in *AuthenticateReque
 // These calls require authenticated service transport. Never log token payloads.
 type IamServiceServer interface {
 	CreateGuestSession(context.Context, *CreateGuestSessionRequest) (*TokenPair, error)
-	// Initial login for provisioned admins/editors, not registration.
+	// Password login for registered accounts (legacy RPC name).
+	RegisterPatient(context.Context, *RegisterPatientRequest) (*TokenPair, error)
+	SetRole(context.Context, *SetRoleRequest) (*emptypb.Empty, error)
 	SignInStaff(context.Context, *SignInStaffRequest) (*TokenPair, error)
 	RefreshTokens(context.Context, *RefreshTokensRequest) (*TokenPair, error)
 	Authenticate(context.Context, *AuthenticateRequest) (*Principal, error)
@@ -140,6 +166,12 @@ type UnimplementedIamServiceServer struct{}
 
 func (UnimplementedIamServiceServer) CreateGuestSession(context.Context, *CreateGuestSessionRequest) (*TokenPair, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateGuestSession not implemented")
+}
+func (UnimplementedIamServiceServer) RegisterPatient(context.Context, *RegisterPatientRequest) (*TokenPair, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterPatient not implemented")
+}
+func (UnimplementedIamServiceServer) SetRole(context.Context, *SetRoleRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetRole not implemented")
 }
 func (UnimplementedIamServiceServer) SignInStaff(context.Context, *SignInStaffRequest) (*TokenPair, error) {
 	return nil, status.Error(codes.Unimplemented, "method SignInStaff not implemented")
@@ -191,6 +223,42 @@ func _IamService_CreateGuestSession_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IamServiceServer).CreateGuestSession(ctx, req.(*CreateGuestSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IamService_RegisterPatient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterPatientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IamServiceServer).RegisterPatient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IamService_RegisterPatient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IamServiceServer).RegisterPatient(ctx, req.(*RegisterPatientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IamService_SetRole_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetRoleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IamServiceServer).SetRole(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IamService_SetRole_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IamServiceServer).SetRole(ctx, req.(*SetRoleRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -295,6 +363,14 @@ var IamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateGuestSession",
 			Handler:    _IamService_CreateGuestSession_Handler,
+		},
+		{
+			MethodName: "RegisterPatient",
+			Handler:    _IamService_RegisterPatient_Handler,
+		},
+		{
+			MethodName: "SetRole",
+			Handler:    _IamService_SetRole_Handler,
 		},
 		{
 			MethodName: "SignInStaff",

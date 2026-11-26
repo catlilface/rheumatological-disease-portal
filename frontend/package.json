@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "cd .. && husky frontend/.husky",
+    "test:patient-e2e": "node tests/integration/patient.mjs",
     "test:integration": "node --test tests/integration/nginx.mjs"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "jsdom": "^29.1.1",
     "lint-staged": "^16.4.0",
     "oxlint": "^1.90.0",
+    "playwright-core": "^1.65.1",
     "prettier": "^3.10.1",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",

@@ -5,6 +5,10 @@ import "portal/bff/internal/domain"
 type Cabinets struct {
 	Runtime
 	Records Store[string, *domain.Cabinet]
+	Archive interface {
+		Cabinet(string) (*domain.Cabinet, error)
+		SaveCabinet(string, *domain.Cabinet) error
+	}
 }
 
 // PatientCabinet is an owner-scoped application service, valid within one unit of work.
@@ -18,12 +22,22 @@ func (s Cabinets) For(a *domain.Actor) (PatientCabinet, error) {
 	if err := a.RequirePatient(); err != nil {
 		return PatientCabinet{}, err
 	}
+	if s.Archive != nil {
+		c, err := s.Archive.Cabinet(a.ID)
+		return PatientCabinet{c, s.Runtime}, err
+	}
 	c, ok := s.Records.Get(a.ID)
 	if !ok {
 		c = domain.NewCabinet()
 		s.Records.Put(a.ID, c)
 	}
 	return PatientCabinet{c, s.Runtime}, nil
+}
+func (s Cabinets) Save(a *domain.Actor, p PatientCabinet) error {
+	if s.Archive != nil {
+		return s.Archive.SaveCabinet(a.ID, p.record)
+	}
+	return nil
 }
 func (p PatientCabinet) Onboarding() domain.Onboarding { return p.record.Onboarding() }
 func (p PatientCabinet) Finish(x domain.OnboardingInput) ([]domain.Resource, error) {

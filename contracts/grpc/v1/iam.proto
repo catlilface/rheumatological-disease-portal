@@ -12,7 +12,9 @@ import "google/protobuf/timestamp.proto";
 // These calls require authenticated service transport. Never log token payloads.
 service IamService {
   rpc CreateGuestSession(CreateGuestSessionRequest) returns (TokenPair);
-  // Initial login for provisioned admins/editors, not registration.
+  // Password login for registered accounts (legacy RPC name).
+  rpc RegisterPatient(RegisterPatientRequest) returns (TokenPair);
+  rpc SetRole(SetRoleRequest) returns (google.protobuf.Empty);
   rpc SignInStaff(SignInStaffRequest) returns (TokenPair);
   rpc RefreshTokens(RefreshTokensRequest) returns (TokenPair);
   rpc Authenticate(AuthenticateRequest) returns (Principal);
@@ -44,6 +46,18 @@ message SignInStaffRequest {
   string password = 3;
 }
 
+message RegisterPatientRequest {
+  string request_id = 1;
+  string email = 2;
+  string password = 3;
+  string consent_version = 4;
+  string guest_access_token = 5; // Optional proof to retain this guest's own history.
+}
+message SetRoleRequest {
+  string access_token = 1;
+  string email = 2;
+  UserRole role = 3;
+}
 message RefreshTokensRequest {
   string request_id = 1;
   string refresh_token = 2;
@@ -77,6 +91,7 @@ message CheckAccessRequest {
   rheuma.common.v1.ResourceReference resource = 3;
   // Resolved by the trusted resource owner, never accepted from the browser.
   string resource_owner_subject_id = 4;
+  string access_token = 5; // Current browser credential; identifiers alone never authorize reads.
 }
 
 message AccessDecision {

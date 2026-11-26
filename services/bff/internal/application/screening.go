@@ -9,6 +9,11 @@ type OwnedResult struct {
 }
 type Screening struct {
 	Runtime
+	Archive interface {
+		SaveResult(string, domain.Result) error
+		Result(string, domain.ResultRef) (domain.Result, error)
+		History(string, domain.Window) (domain.Page[domain.Result], error)
+	}
 	Definition        domain.Survey
 	ExplanationSource SourceRef
 	Sessions          Store[OwnedID, *domain.Session]
@@ -53,11 +58,20 @@ func (s Screening) Get(key OwnedID) (*domain.Session, error) {
 	return v, nil
 }
 func (s Screening) Exact(owner string, ref domain.ResultRef) (domain.Result, error) {
+	if s.Archive != nil {
+		return s.Archive.Result(owner, ref)
+	}
 	v, ok := s.Results.Get(OwnedResult{owner, ref})
 	if !ok {
 		return v, domain.NotFound()
 	}
 	return v, nil
+}
+func (s Screening) History(owner string, w domain.Window) (domain.Page[domain.Result], error) {
+	if s.Archive == nil {
+		return domain.Page[domain.Result]{}, domain.NotFound()
+	}
+	return s.Archive.History(owner, w)
 }
 func (s Screening) Latest(key OwnedID) (domain.Result, error) {
 	session, err := s.Get(key)
@@ -86,6 +100,7 @@ func (s Screening) change(key OwnedID, v int, action func(*domain.Session) (bool
 	if err = session.Editable(v); err != nil {
 		return nil, err
 	}
+	session = session.Copy()
 	snapshot, err := action(session)
 	if err != nil {
 		return nil, err
@@ -93,7 +108,13 @@ func (s Screening) change(key OwnedID, v int, action func(*domain.Session) (bool
 	refs := []domain.Resource{domain.Ref("screening", session.ID, session.Version)}
 	if snapshot {
 		r := session.Snapshot(s.Definition, s.ID)
-		s.Results.Put(OwnedResult{key.Owner, r.ResultRef}, r)
+		if s.Archive != nil {
+			if err := s.Archive.SaveResult(key.Owner, r); err != nil {
+				return nil, err
+			}
+		} else {
+			s.Results.Put(OwnedResult{key.Owner, r.ResultRef}, r)
+		}
 		refs = append(refs, domain.Ref("result", r.ID, r.Version))
 	}
 	s.Sessions.Put(key, session)

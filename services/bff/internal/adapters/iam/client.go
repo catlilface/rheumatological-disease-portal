@@ -66,6 +66,9 @@ func login(p *pb.Principal) (*application.Login, error) {
 		}
 		kind = "staff"
 		switch p.Roles[0] {
+		case pb.UserRole_USER_ROLE_PATIENT:
+			kind = "member"
+			roles = append(roles, "patient")
 		case pb.UserRole_USER_ROLE_ADMIN:
 			roles = append(roles, "admin")
 		case pb.UserRole_USER_ROLE_EDITOR:
@@ -76,7 +79,7 @@ func login(p *pb.Principal) (*application.Login, error) {
 	} else if len(p.Roles) != 0 {
 		return nil, unavailable()
 	}
-	return &application.Login{Actor: &domain.Actor{ID: p.Actor.SubjectId, Kind: kind}, SessionID: p.Actor.SessionId, Roles: roles, Expires: p.SessionExpiresAt.AsTime()}, nil
+	return &application.Login{Actor: &domain.Actor{ID: p.Actor.SubjectId, Kind: kind, Consent: kind == "member"}, SessionID: p.Actor.SessionId, Roles: roles, Expires: p.SessionExpiresAt.AsTime()}, nil
 }
 func pair(t *pb.TokenPair, err error, code string) (*application.Login, error) {
 	if err != nil {
@@ -97,6 +100,39 @@ func (c *Client) Guest(ctx context.Context, key, cookie string) (*application.Lo
 	p, e := c.rpc.CreateGuestSession(ctx, &pb.CreateGuestSessionRequest{RequestId: key, AccessToken: cookie})
 	return pair(p, e, "SESSION_REQUIRED")
 }
+func (c *Client) Register(ctx context.Context, key, access, email, password string, consent application.MedicalConsent) (*application.Login, error) {
+	if !consent.Accepted {
+		return nil, domain.Fail(domain.Invalid, "VALIDATION_ERROR")
+	}
+	if consent.Version != application.PolicyVersion {
+		return nil, domain.Fail(domain.Invalid, "CONSENT_VERSION_MISMATCH")
+	}
+	t, e := c.rpc.RegisterPatient(ctx, &pb.RegisterPatientRequest{RequestId: key, Email: email, Password: password, ConsentVersion: consent.Version, GuestAccessToken: access})
+	switch status.Code(e) {
+	case codes.AlreadyExists:
+		return nil, domain.Fail(domain.Conflict, "ACCOUNT_ALREADY_EXISTS")
+	case codes.FailedPrecondition:
+		return nil, domain.Fail(domain.Conflict, "IDEMPOTENCY_KEY_REUSED")
+	case codes.InvalidArgument:
+		return nil, domain.Fail(domain.Invalid, "VALIDATION_ERROR")
+	}
+	return pair(t, e, "SESSION_REQUIRED")
+}
+func (c *Client) SetRole(ctx context.Context, token, email, role string) error {
+	roles := map[string]pb.UserRole{"admin": pb.UserRole_USER_ROLE_ADMIN, "editor": pb.UserRole_USER_ROLE_EDITOR, "patient": pb.UserRole_USER_ROLE_PATIENT}
+	_, e := c.rpc.SetRole(ctx, &pb.SetRoleRequest{AccessToken: token, Email: email, Role: roles[role]})
+	switch status.Code(e) {
+	case codes.OK:
+		return nil
+	case codes.PermissionDenied:
+		return domain.Fail(domain.Forbidden, "ADMIN_REQUIRED")
+	case codes.InvalidArgument:
+		return domain.Fail(domain.Invalid, "VALIDATION_ERROR")
+	case codes.NotFound:
+		return domain.NotFound()
+	}
+	return failure(e, "SESSION_REQUIRED")
+}
 func (c *Client) SignIn(ctx context.Context, email, password string) (*application.Login, error) {
 	p, e := c.rpc.SignInStaff(ctx, &pb.SignInStaffRequest{RequestId: uuid.NewString(), Email: email, Password: password})
 	return pair(p, e, "INVALID_CREDENTIALS")
@@ -113,7 +149,11 @@ func (c *Client) Session(ctx context.Context, token string) (*application.Login,
 	if e != nil {
 		return nil, failure(e, "SESSION_REQUIRED")
 	}
-	return login(p)
+	l, err := login(p)
+	if err == nil {
+		l.Access = token
+	}
+	return l, err
 }
 func (c *Client) Revoke(ctx context.Context, token string) error {
 	_, e := c.rpc.EndSession(ctx, &pb.AuthenticateRequest{RequestId: uuid.NewString(), AccessToken: token})
@@ -129,8 +169,8 @@ func (c *Client) Check(ctx context.Context, l *application.Login, action string,
 		resource.Version = &version
 	}
 	d, e := c.rpc.CheckAccess(ctx, &pb.CheckAccessRequest{
-		Context: &common.RequestContext{RequestId: uuid.NewString(), Actor: &common.ActorContext{SubjectId: l.Actor.ID, SessionId: l.SessionID}},
-		Action:  action, Resource: resource, ResourceOwnerSubjectId: owner,
+		Context:     &common.RequestContext{RequestId: uuid.NewString(), Actor: &common.ActorContext{SubjectId: l.Actor.ID, SessionId: l.SessionID}},
+		AccessToken: l.Access, Action: action, Resource: resource, ResourceOwnerSubjectId: owner,
 	})
 	if status.Code(e) == codes.InvalidArgument {
 		return domain.NotFound()
@@ -141,6 +181,14 @@ func (c *Client) Check(ctx context.Context, l *application.Login, action string,
 	if !d.GetAllowed() {
 		if d.GetReasonCode() == "ACCESS_REVOKED" {
 			return domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
+		}
+		if r.Type == "cabinet" && d.GetReasonCode() == "ACCESS_DENIED" {
+			if err := l.Actor.RequireRegistered(); err != nil {
+				return err
+			}
+			if err := l.Actor.RequirePatient(); err != nil {
+				return err
+			}
 		}
 		return domain.NotFound()
 	}

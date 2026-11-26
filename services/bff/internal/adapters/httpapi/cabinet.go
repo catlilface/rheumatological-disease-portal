@@ -16,7 +16,11 @@ func cabinetCommand[T any](a *API, s application.Cabinets, id string, apply func
 		if err != nil {
 			return nil, err
 		}
-		return apply(p, c, x)
+		refs, err := apply(p, c, x)
+		if err != nil {
+			return nil, err
+		}
+		return refs, s.Save(c.actor, p)
 	})
 }
 func (a *API) Cabinet(s application.Cabinets) {

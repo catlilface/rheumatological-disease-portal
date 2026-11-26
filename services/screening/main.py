@@ -10,6 +10,7 @@ from contracts.common.v1.screening_pb2 import Survey
 from contracts.grpc.v1 import screening_pb2_grpc as rpc
 from runtime import reply, serve
 
+from .identity import principal_for
 from .postgres_store import PostgresScreeningStore, connect_screening
 from .registry import LocalRegistry
 from .storage import (
@@ -109,9 +110,9 @@ class MockScreening(Screening):
 
     @staticmethod
     async def _subject(request_context, context):
-        actor = request_context.actor
-        if not actor.subject_id.strip() or not actor.session_id.strip():
-            await context.abort(StatusCode.UNAUTHENTICATED, 'Mock actor context is required.')
+        actor = await principal_for(context)
+        if request_context.HasField('actor') and request_context.actor != actor:
+            await context.abort(StatusCode.PERMISSION_DENIED, 'Actor mismatch.')
         return actor.subject_id
 
     @staticmethod
@@ -142,7 +143,7 @@ async def main():
     screening = build_mock_screening() if mock else Screening()
     await serve(
         'screening', rpc.add_ScreeningQueryServiceServicer_to_server, screening, ScreeningCommand,
-        command_handler=screening.handle_command if mock else None,
+        command_handler=screening.handle_command if mock else None, private_tls=mock,
     )
 
 

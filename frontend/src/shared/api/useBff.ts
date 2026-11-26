@@ -47,11 +47,11 @@ export function useBffCommand<T>() {
     [],
   )
 
-  async function run(task: Command<T>) {
+  async function run(task: Command<T>, remember = true) {
     if (active.current) return
     const controller = new AbortController()
     active.current = controller
-    last.current = task
+    last.current = remember ? task : null
     setState({ status: 'loading' })
     try {
       const data = await task(controller.signal, () => {

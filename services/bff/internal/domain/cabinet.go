@@ -74,6 +74,7 @@ type DiaryEntry struct {
 	Data DiaryData `json:"data"`
 }
 type OnboardingInput struct {
+	Name      string           `json:"name,omitempty"`
 	Diagnosis *string          `json:"diagnosis"`
 	Meds      []Regimen        `json:"medications"`
 	Reminders ReminderSettings `json:"reminders"`
@@ -89,12 +90,14 @@ func (x OnboardingInput) Validate() error {
 }
 
 type Onboarding struct {
+	Name        string           `json:"name,omitempty"`
 	Completed   bool             `json:"completed"`
 	Diagnosis   *string          `json:"diagnosis"`
 	Medications []Medication     `json:"medications"`
 	Reminders   ReminderSettings `json:"reminders"`
 }
 type Cabinet struct {
+	name      string
 	completed bool
 	diagnosis *string
 	reminders ReminderSettings
@@ -129,7 +132,7 @@ func (c Cabinet) medications() []Medication {
 func (c Cabinet) Onboarding() Onboarding {
 	rows := c.medications()
 	slices.SortFunc(rows, func(a, b Medication) int { return cmp.Compare(a.ID, b.ID) })
-	return Onboarding{c.completed, c.diagnosis, rows, c.reminders}
+	return Onboarding{c.name, c.completed, c.diagnosis, rows, c.reminders}
 }
 func (c *Cabinet) Finish(x OnboardingInput, now time.Time, id func() string) ([]Resource, error) {
 	if c.completed {
@@ -138,7 +141,7 @@ func (c *Cabinet) Finish(x OnboardingInput, now time.Time, id func() string) ([]
 	if err := x.Validate(); err != nil {
 		return nil, err
 	}
-	c.completed, c.diagnosis, c.reminders = true, x.Diagnosis, x.Reminders
+	c.name, c.completed, c.diagnosis, c.reminders = x.Name, true, x.Diagnosis, x.Reminders
 	var refs []Resource
 	for _, r := range x.Meds {
 		refs = append(refs, c.add(r, now, id))
