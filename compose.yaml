@@ -53,8 +53,6 @@ services:
       context: .
       dockerfile: services/bff/Dockerfile
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     networks:
       edge:
         aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
