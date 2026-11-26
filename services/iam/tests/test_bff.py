@@ -30,6 +30,16 @@ class BrowserIdentity(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_guest_registration_reports_existing_account(self):
+        registration = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18),
+                        'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}}
+        self.request('POST', '/auth/registrations', 201, data=registration)
+        _, guest = self.request('POST', '/auth/guest-sessions', 201)
+        cookie = guest['portal_session'].value
+        error, _ = self.request('POST', '/auth/registrations', 409, data=registration, cookie=cookie)
+        self.assertEqual(error['code'], 'ACCOUNT_ALREADY_EXISTS')
+        self.assertEqual(self.request('GET', '/auth/session', 200, cookie=cookie)[0]['kind'], 'guest')
+
     def test_patient_journey(self):
         account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
         registration = {**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}}

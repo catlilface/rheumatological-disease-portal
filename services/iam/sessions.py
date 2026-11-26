@@ -10,7 +10,7 @@ from uuid import UUID, uuid7
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from grpc import StatusCode
-from pg8000.dbapi import connect, IntegrityError
+from pg8000.dbapi import connect, DatabaseError
 
 from contracts.common.v1.metadata_pb2 import ActorContext
 from contracts.grpc.v1 import iam_pb2 as api
@@ -107,8 +107,9 @@ class Authority:
         if guest_id:
             try:
                 cur.execute("UPDATE principals SET kind='staff',email_hmac=%s,password_hash=%s,consent_version=%s WHERE id=%s AND kind='guest' RETURNING id", (*params, guest_id))
-            except IntegrityError as exc:
-                if exc.args[0].get('C') == '23505':
+            except DatabaseError as exc:
+                detail = exc.args[0] if exc.args else None
+                if isinstance(detail, dict) and detail.get('C') == '23505':
                     raise Denied(StatusCode.ALREADY_EXISTS) from None
                 raise
         else:
