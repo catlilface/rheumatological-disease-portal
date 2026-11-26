@@ -20,14 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IamService_CreateGuestSession_FullMethodName = "/rheuma.iam.grpc.v1.IamService/CreateGuestSession"
-	IamService_RegisterPatient_FullMethodName    = "/rheuma.iam.grpc.v1.IamService/RegisterPatient"
-	IamService_SetRole_FullMethodName            = "/rheuma.iam.grpc.v1.IamService/SetRole"
-	IamService_SignInStaff_FullMethodName        = "/rheuma.iam.grpc.v1.IamService/SignInStaff"
-	IamService_RefreshTokens_FullMethodName      = "/rheuma.iam.grpc.v1.IamService/RefreshTokens"
-	IamService_Authenticate_FullMethodName       = "/rheuma.iam.grpc.v1.IamService/Authenticate"
-	IamService_CheckAccess_FullMethodName        = "/rheuma.iam.grpc.v1.IamService/CheckAccess"
-	IamService_EndSession_FullMethodName         = "/rheuma.iam.grpc.v1.IamService/EndSession"
+	IamService_CreateGuestSession_FullMethodName     = "/rheuma.iam.grpc.v1.IamService/CreateGuestSession"
+	IamService_RegisterPatient_FullMethodName        = "/rheuma.iam.grpc.v1.IamService/RegisterPatient"
+	IamService_SetRole_FullMethodName                = "/rheuma.iam.grpc.v1.IamService/SetRole"
+	IamService_WithdrawMedicalConsent_FullMethodName = "/rheuma.iam.grpc.v1.IamService/WithdrawMedicalConsent"
+	IamService_SignInStaff_FullMethodName            = "/rheuma.iam.grpc.v1.IamService/SignInStaff"
+	IamService_RefreshTokens_FullMethodName          = "/rheuma.iam.grpc.v1.IamService/RefreshTokens"
+	IamService_Authenticate_FullMethodName           = "/rheuma.iam.grpc.v1.IamService/Authenticate"
+	IamService_CheckAccess_FullMethodName            = "/rheuma.iam.grpc.v1.IamService/CheckAccess"
+	IamService_EndSession_FullMethodName             = "/rheuma.iam.grpc.v1.IamService/EndSession"
 )
 
 // IamServiceClient is the client API for IamService service.
@@ -41,6 +42,7 @@ type IamServiceClient interface {
 	// Password login for registered accounts (legacy RPC name).
 	RegisterPatient(ctx context.Context, in *RegisterPatientRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	SetRole(ctx context.Context, in *SetRoleRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	WithdrawMedicalConsent(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SignInStaff(ctx context.Context, in *SignInStaffRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	RefreshTokens(ctx context.Context, in *RefreshTokensRequest, opts ...grpc.CallOption) (*TokenPair, error)
 	Authenticate(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*Principal, error)
@@ -81,6 +83,16 @@ func (c *iamServiceClient) SetRole(ctx context.Context, in *SetRoleRequest, opts
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, IamService_SetRole_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *iamServiceClient) WithdrawMedicalConsent(ctx context.Context, in *AuthenticateRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, IamService_WithdrawMedicalConsent_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +160,7 @@ type IamServiceServer interface {
 	// Password login for registered accounts (legacy RPC name).
 	RegisterPatient(context.Context, *RegisterPatientRequest) (*TokenPair, error)
 	SetRole(context.Context, *SetRoleRequest) (*emptypb.Empty, error)
+	WithdrawMedicalConsent(context.Context, *AuthenticateRequest) (*emptypb.Empty, error)
 	SignInStaff(context.Context, *SignInStaffRequest) (*TokenPair, error)
 	RefreshTokens(context.Context, *RefreshTokensRequest) (*TokenPair, error)
 	Authenticate(context.Context, *AuthenticateRequest) (*Principal, error)
@@ -172,6 +185,9 @@ func (UnimplementedIamServiceServer) RegisterPatient(context.Context, *RegisterP
 }
 func (UnimplementedIamServiceServer) SetRole(context.Context, *SetRoleRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetRole not implemented")
+}
+func (UnimplementedIamServiceServer) WithdrawMedicalConsent(context.Context, *AuthenticateRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method WithdrawMedicalConsent not implemented")
 }
 func (UnimplementedIamServiceServer) SignInStaff(context.Context, *SignInStaffRequest) (*TokenPair, error) {
 	return nil, status.Error(codes.Unimplemented, "method SignInStaff not implemented")
@@ -259,6 +275,24 @@ func _IamService_SetRole_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IamServiceServer).SetRole(ctx, req.(*SetRoleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IamService_WithdrawMedicalConsent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthenticateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IamServiceServer).WithdrawMedicalConsent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IamService_WithdrawMedicalConsent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IamServiceServer).WithdrawMedicalConsent(ctx, req.(*AuthenticateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -371,6 +405,10 @@ var IamService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetRole",
 			Handler:    _IamService_SetRole_Handler,
+		},
+		{
+			MethodName: "WithdrawMedicalConsent",
+			Handler:    _IamService_WithdrawMedicalConsent_Handler,
 		},
 		{
 			MethodName: "SignInStaff",

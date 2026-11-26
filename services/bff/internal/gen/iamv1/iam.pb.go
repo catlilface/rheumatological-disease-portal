@@ -511,13 +511,14 @@ func (x *AuthenticateRequest) GetAccessToken() string {
 }
 
 type Principal struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Actor            *commonv1.ActorContext `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
-	IsGuest          bool                   `protobuf:"varint,2,opt,name=is_guest,json=isGuest,proto3" json:"is_guest,omitempty"`
-	Roles            []UserRole             `protobuf:"varint,3,rep,packed,name=roles,proto3,enum=rheuma.iam.grpc.v1.UserRole" json:"roles,omitempty"`
-	SessionExpiresAt *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=session_expires_at,json=sessionExpiresAt,proto3" json:"session_expires_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Actor             *commonv1.ActorContext `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
+	IsGuest           bool                   `protobuf:"varint,2,opt,name=is_guest,json=isGuest,proto3" json:"is_guest,omitempty"`
+	Roles             []UserRole             `protobuf:"varint,3,rep,packed,name=roles,proto3,enum=rheuma.iam.grpc.v1.UserRole" json:"roles,omitempty"`
+	SessionExpiresAt  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=session_expires_at,json=sessionExpiresAt,proto3" json:"session_expires_at,omitempty"`
+	HasMedicalConsent bool                   `protobuf:"varint,5,opt,name=has_medical_consent,json=hasMedicalConsent,proto3" json:"has_medical_consent,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Principal) Reset() {
@@ -576,6 +577,13 @@ func (x *Principal) GetSessionExpiresAt() *timestamppb.Timestamp {
 		return x.SessionExpiresAt
 	}
 	return nil
+}
+
+func (x *Principal) GetHasMedicalConsent() bool {
+	if x != nil {
+		return x.HasMedicalConsent
+	}
+	return false
 }
 
 type CheckAccessRequest struct {
@@ -772,12 +780,13 @@ const file_contracts_grpc_v1_iam_proto_rawDesc = "" +
 	"\x13AuthenticateRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12!\n" +
-	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\"\xda\x01\n" +
+	"\faccess_token\x18\x02 \x01(\tR\vaccessToken\"\x8a\x02\n" +
 	"\tPrincipal\x124\n" +
 	"\x05actor\x18\x01 \x01(\v2\x1e.rheuma.common.v1.ActorContextR\x05actor\x12\x19\n" +
 	"\bis_guest\x18\x02 \x01(\bR\aisGuest\x122\n" +
 	"\x05roles\x18\x03 \x03(\x0e2\x1c.rheuma.iam.grpc.v1.UserRoleR\x05roles\x12H\n" +
-	"\x12session_expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x10sessionExpiresAt\"\x87\x02\n" +
+	"\x12session_expires_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x10sessionExpiresAt\x12.\n" +
+	"\x13has_medical_consent\x18\x05 \x01(\bR\x11hasMedicalConsent\"\x87\x02\n" +
 	"\x12CheckAccessRequest\x12:\n" +
 	"\acontext\x18\x01 \x01(\v2 .rheuma.common.v1.RequestContextR\acontext\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12?\n" +
@@ -797,12 +806,13 @@ const file_contracts_grpc_v1_iam_proto_rawDesc = "" +
 	"\x15USER_ROLE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11USER_ROLE_PATIENT\x10\x01\x12\x13\n" +
 	"\x0fUSER_ROLE_ADMIN\x10\x02\x12\x14\n" +
-	"\x10USER_ROLE_EDITOR\x10\x032\xc7\x05\n" +
+	"\x10USER_ROLE_EDITOR\x10\x032\xa2\x06\n" +
 	"\n" +
 	"IamService\x12b\n" +
 	"\x12CreateGuestSession\x12-.rheuma.iam.grpc.v1.CreateGuestSessionRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12\\\n" +
 	"\x0fRegisterPatient\x12*.rheuma.iam.grpc.v1.RegisterPatientRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12E\n" +
-	"\aSetRole\x12\".rheuma.iam.grpc.v1.SetRoleRequest\x1a\x16.google.protobuf.Empty\x12T\n" +
+	"\aSetRole\x12\".rheuma.iam.grpc.v1.SetRoleRequest\x1a\x16.google.protobuf.Empty\x12Y\n" +
+	"\x16WithdrawMedicalConsent\x12'.rheuma.iam.grpc.v1.AuthenticateRequest\x1a\x16.google.protobuf.Empty\x12T\n" +
 	"\vSignInStaff\x12&.rheuma.iam.grpc.v1.SignInStaffRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12X\n" +
 	"\rRefreshTokens\x12(.rheuma.iam.grpc.v1.RefreshTokensRequest\x1a\x1d.rheuma.iam.grpc.v1.TokenPair\x12V\n" +
 	"\fAuthenticate\x12'.rheuma.iam.grpc.v1.AuthenticateRequest\x1a\x1d.rheuma.iam.grpc.v1.Principal\x12Y\n" +
@@ -857,21 +867,23 @@ var file_contracts_grpc_v1_iam_proto_depIdxs = []int32{
 	1,  // 11: rheuma.iam.grpc.v1.IamService.CreateGuestSession:input_type -> rheuma.iam.grpc.v1.CreateGuestSessionRequest
 	3,  // 12: rheuma.iam.grpc.v1.IamService.RegisterPatient:input_type -> rheuma.iam.grpc.v1.RegisterPatientRequest
 	4,  // 13: rheuma.iam.grpc.v1.IamService.SetRole:input_type -> rheuma.iam.grpc.v1.SetRoleRequest
-	2,  // 14: rheuma.iam.grpc.v1.IamService.SignInStaff:input_type -> rheuma.iam.grpc.v1.SignInStaffRequest
-	5,  // 15: rheuma.iam.grpc.v1.IamService.RefreshTokens:input_type -> rheuma.iam.grpc.v1.RefreshTokensRequest
-	7,  // 16: rheuma.iam.grpc.v1.IamService.Authenticate:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
-	9,  // 17: rheuma.iam.grpc.v1.IamService.CheckAccess:input_type -> rheuma.iam.grpc.v1.CheckAccessRequest
-	7,  // 18: rheuma.iam.grpc.v1.IamService.EndSession:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
-	6,  // 19: rheuma.iam.grpc.v1.IamService.CreateGuestSession:output_type -> rheuma.iam.grpc.v1.TokenPair
-	6,  // 20: rheuma.iam.grpc.v1.IamService.RegisterPatient:output_type -> rheuma.iam.grpc.v1.TokenPair
-	15, // 21: rheuma.iam.grpc.v1.IamService.SetRole:output_type -> google.protobuf.Empty
-	6,  // 22: rheuma.iam.grpc.v1.IamService.SignInStaff:output_type -> rheuma.iam.grpc.v1.TokenPair
-	6,  // 23: rheuma.iam.grpc.v1.IamService.RefreshTokens:output_type -> rheuma.iam.grpc.v1.TokenPair
-	8,  // 24: rheuma.iam.grpc.v1.IamService.Authenticate:output_type -> rheuma.iam.grpc.v1.Principal
-	10, // 25: rheuma.iam.grpc.v1.IamService.CheckAccess:output_type -> rheuma.iam.grpc.v1.AccessDecision
-	15, // 26: rheuma.iam.grpc.v1.IamService.EndSession:output_type -> google.protobuf.Empty
-	19, // [19:27] is the sub-list for method output_type
-	11, // [11:19] is the sub-list for method input_type
+	7,  // 14: rheuma.iam.grpc.v1.IamService.WithdrawMedicalConsent:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
+	2,  // 15: rheuma.iam.grpc.v1.IamService.SignInStaff:input_type -> rheuma.iam.grpc.v1.SignInStaffRequest
+	5,  // 16: rheuma.iam.grpc.v1.IamService.RefreshTokens:input_type -> rheuma.iam.grpc.v1.RefreshTokensRequest
+	7,  // 17: rheuma.iam.grpc.v1.IamService.Authenticate:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
+	9,  // 18: rheuma.iam.grpc.v1.IamService.CheckAccess:input_type -> rheuma.iam.grpc.v1.CheckAccessRequest
+	7,  // 19: rheuma.iam.grpc.v1.IamService.EndSession:input_type -> rheuma.iam.grpc.v1.AuthenticateRequest
+	6,  // 20: rheuma.iam.grpc.v1.IamService.CreateGuestSession:output_type -> rheuma.iam.grpc.v1.TokenPair
+	6,  // 21: rheuma.iam.grpc.v1.IamService.RegisterPatient:output_type -> rheuma.iam.grpc.v1.TokenPair
+	15, // 22: rheuma.iam.grpc.v1.IamService.SetRole:output_type -> google.protobuf.Empty
+	15, // 23: rheuma.iam.grpc.v1.IamService.WithdrawMedicalConsent:output_type -> google.protobuf.Empty
+	6,  // 24: rheuma.iam.grpc.v1.IamService.SignInStaff:output_type -> rheuma.iam.grpc.v1.TokenPair
+	6,  // 25: rheuma.iam.grpc.v1.IamService.RefreshTokens:output_type -> rheuma.iam.grpc.v1.TokenPair
+	8,  // 26: rheuma.iam.grpc.v1.IamService.Authenticate:output_type -> rheuma.iam.grpc.v1.Principal
+	10, // 27: rheuma.iam.grpc.v1.IamService.CheckAccess:output_type -> rheuma.iam.grpc.v1.AccessDecision
+	15, // 28: rheuma.iam.grpc.v1.IamService.EndSession:output_type -> google.protobuf.Empty
+	20, // [20:29] is the sub-list for method output_type
+	11, // [11:20] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name

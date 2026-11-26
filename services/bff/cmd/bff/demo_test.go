@@ -32,6 +32,13 @@ func (d demoAuth) SignIn(_ context.Context, email, password string) (*app.Login,
 func (d demoAuth) Session(_ context.Context, cookie string) (*app.Login, error) {
 	return d.s.Session(cookie)
 }
+func (d demoAuth) WithdrawConsent(_ context.Context, token string) error {
+	l, err := d.s.Session(token)
+	if err != nil {
+		return err
+	}
+	return l.Actor.WithdrawConsent()
+}
 func (d demoAuth) Revoke(_ context.Context, token string) error {
 	l, err := d.s.Session(token)
 	if err == nil {

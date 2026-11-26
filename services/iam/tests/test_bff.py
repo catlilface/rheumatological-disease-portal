@@ -40,6 +40,18 @@ class BrowserIdentity(unittest.TestCase):
         self.assertEqual(error['code'], 'ACCOUNT_ALREADY_EXISTS')
         self.assertEqual(self.request('GET', '/auth/session', 200, cookie=cookie)[0]['kind'], 'guest')
 
+    def test_consent_withdrawal_applies_to_all_patient_sessions(self):
+        account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
+        _, first = self.request('POST', '/auth/registrations', 201, data={**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}})
+        _, second = self.request('POST', '/auth/session', 200, data=account)
+        self.request('GET', '/me/onboarding', 200, cookie=second['portal_session'].value)
+        for _ in range(2):
+            self.request('DELETE', '/me/medical-data-consent', 204, cookie=first['portal_session'].value)
+        _, new_login = self.request('POST', '/auth/session', 200, data=account)
+        for jar in (first, second, new_login):
+            error, _ = self.request('GET', '/me/onboarding', 403, cookie=jar['portal_session'].value)
+            self.assertEqual(error['code'], 'CONSENT_REQUIRED')
+
     def test_patient_journey(self):
         account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
         registration = {**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}}

@@ -54,6 +54,11 @@ class IAM(rpc.IamServiceServicer):
         return Empty()
 
     @service_authorized
+    def WithdrawMedicalConsent(self, req):
+        self.sessions.withdraw_consent(req.access_token)
+        return Empty()
+
+    @service_authorized
     def SignInStaff(self, req):
         return self.sessions.sign_in(req.email, req.password)
 

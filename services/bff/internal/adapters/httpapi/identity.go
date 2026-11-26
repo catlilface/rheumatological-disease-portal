@@ -92,7 +92,7 @@ func (a *API) identity() {
 	})
 	a.on("withdrawMedicalConsent", registered, func(c *call) (any, error) {
 		c.status = 204
-		return nil, c.actor.WithdrawConsent()
+		return nil, a.auth.WithdrawConsent(c.ctx, c.accessCookie)
 	})
 	a.on("getOperation", current, func(c *call) (any, error) { return a.commands.Get(c.actor, c.id("owner"), c.id("operation_id")) })
 }

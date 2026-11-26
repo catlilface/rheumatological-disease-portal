@@ -41,7 +41,7 @@ def can_access(principal, action, resource_type, target, owner):
         return False
     patient = list(principal.roles) == [api.USER_ROLE_PATIENT]
     if resource_type == 'cabinet':
-        return patient and action in CABINET_ACTIONS
+        return patient and principal.has_medical_consent and action in CABINET_ACTIONS
     return (principal.is_guest or patient) and action in GUEST_ACTIONS.get(resource_type, ())
 
 
@@ -185,15 +185,23 @@ class Authority:
             self.assign(cur, row[0], role)
             cur.execute('UPDATE auth_sessions SET revoked_at=now() WHERE principal_id=%s AND revoked_at IS NULL', (row[0],))
 
+    def withdraw_consent(self, token):
+        with self.transaction() as cur:
+            actor = self.access(cur, token)
+            if list(actor.roles) != [api.USER_ROLE_PATIENT]:
+                raise Denied(StatusCode.PERMISSION_DENIED)
+            cur.execute('UPDATE principals SET consent_version=NULL WHERE id=%s', (actor.actor.subject_id,))
+
     def principal(self, cur, subject, session, expires, at):
-        cur.execute('''SELECT p.kind,r.code FROM principals p
+        cur.execute('''SELECT p.kind,r.code,p.consent_version FROM principals p
             LEFT JOIN principal_roles pr ON pr.principal_id=p.id AND pr.revoked_at IS NULL AND pr.expires_at>%s
             LEFT JOIN roles r ON r.id=pr.role_id WHERE p.id=%s AND p.blocked_at IS NULL''', (at, subject))
         row = cur.fetchone()
         if not row or (row[0] == 'staff' and row[1] not in ROLES):
             raise Denied()
         return api.Principal(actor=ActorContext(subject_id=str(subject), session_id=str(session)), is_guest=row[0] == 'guest',
-                             roles=[] if row[0] == 'guest' else [ROLES[row[1]]], session_expires_at=ts(expires))
+                             roles=[] if row[0] == 'guest' else [ROLES[row[1]]], session_expires_at=ts(expires),
+                             has_medical_consent=row[1] == 'patient' and row[2] == POLICY)
 
     def pair(self, principal, generation, access_end):
         # Recover the current pair for a proven guest retry, without storing bearer secrets.

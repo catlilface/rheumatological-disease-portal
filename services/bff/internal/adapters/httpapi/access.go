@@ -9,7 +9,7 @@ import (
 // The remaining OpenAPI operations describe the isolated demonstration / future APIs.
 // Empty means a public or session-lifecycle operation (no domain resource).
 var mvpResources = map[string]string{
-	"setAccountRole": "", "registerPatient": "",
+	"setAccountRole": "", "registerPatient": "", "withdrawMedicalConsent": "",
 	"getOnboarding": "cabinet", "finishOnboarding": "cabinet", "listScreeningResults": "cabinet",
 	"listMedications": "cabinet", "addMedication": "cabinet", "updateMedication": "cabinet", "stopMedication": "cabinet",
 	"listDoses": "cabinet", "markIntake": "cabinet", "getReminderSettings": "cabinet", "updateReminderSettings": "cabinet",

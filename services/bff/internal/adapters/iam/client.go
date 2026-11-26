@@ -79,7 +79,7 @@ func login(p *pb.Principal) (*application.Login, error) {
 	} else if len(p.Roles) != 0 {
 		return nil, unavailable()
 	}
-	return &application.Login{Actor: &domain.Actor{ID: p.Actor.SubjectId, Kind: kind, Consent: kind == "member"}, SessionID: p.Actor.SessionId, Roles: roles, Expires: p.SessionExpiresAt.AsTime()}, nil
+	return &application.Login{Actor: &domain.Actor{ID: p.Actor.SubjectId, Kind: kind, Consent: kind == "member" && p.HasMedicalConsent}, SessionID: p.Actor.SessionId, Roles: roles, Expires: p.SessionExpiresAt.AsTime()}, nil
 }
 func pair(t *pb.TokenPair, err error, code string) (*application.Login, error) {
 	if err != nil {
@@ -154,6 +154,16 @@ func (c *Client) Session(ctx context.Context, token string) (*application.Login,
 		l.Access = token
 	}
 	return l, err
+}
+func (c *Client) WithdrawConsent(ctx context.Context, token string) error {
+	_, err := c.rpc.WithdrawMedicalConsent(ctx, &pb.AuthenticateRequest{AccessToken: token})
+	if status.Code(err) == codes.PermissionDenied {
+		return domain.Fail(domain.Forbidden, "PATIENT_REQUIRED")
+	}
+	if err != nil {
+		return failure(err, "SESSION_REQUIRED")
+	}
+	return nil
 }
 func (c *Client) Revoke(ctx context.Context, token string) error {
 	_, e := c.rpc.EndSession(ctx, &pb.AuthenticateRequest{RequestId: uuid.NewString(), AccessToken: token})
