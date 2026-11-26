@@ -36,25 +36,24 @@ export TEST_PGPORT TEST_KAFKA_BROKERS="127.0.0.1:$port"
 TEST_PGPORT=$(docker port "$postgres" 5432/tcp)
 TEST_PGPORT=${TEST_PGPORT##*:}
 
-docker exec -i "$postgres" psql -X -U postgres -v ON_ERROR_STOP=1 <<'SQL'
-CREATE ROLE migrator;
-CREATE ROLE app LOGIN;
-SQL
-docker exec -i "$postgres" psql -X -U postgres -v ON_ERROR_STOP=1 -v password="$TEST_PGPASSWORD" <<'SQL'
-ALTER ROLE app PASSWORD :'password';
+migration_password=$(openssl rand -hex 24)
+docker exec -i "$postgres" psql -X -U postgres -v ON_ERROR_STOP=1 \
+    -v password="$TEST_PGPASSWORD" -v migration_password="$migration_password" <<'SQL'
+CREATE ROLE migrator LOGIN PASSWORD :'migration_password';
+CREATE ROLE app LOGIN PASSWORD :'password';
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO migrator;
+CREATE SCHEMA migration AUTHORIZATION migrator;
 SET ROLE migrator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO app;
 SQL
-for migration in services/bff/migrations/*.sql; do
-    {
-        printf 'BEGIN;\nSET ROLE migrator;\n'
-        sed '/^-- migrate:down/,$d' "$migration"
-        printf 'COMMIT;\n'
-    } | docker exec -i "$postgres" psql -X -U postgres -v ON_ERROR_STOP=1
-done
+docker run --rm --network "container:$postgres" \
+    -e "DATABASE_URL=postgres://migrator:$migration_password@127.0.0.1:5432/postgres?sslmode=disable&search_path=migration" \
+    -v "$PWD/infra/db/common:/db/common:ro" \
+    -v "$PWD/services/bff/migrations:/services/bff/migrations:ro" \
+    ghcr.io/amacneil/dbmate:2.38.2 \
+    --no-dump-schema --migration-lock -d /db/common -d /services/bff/migrations migrate --strict
 
 export TEST_DELIVERY_DSN="postgres://app:$TEST_PGPASSWORD@$TEST_PGHOST:$TEST_PGPORT/postgres?sslmode=disable"
 (cd services/bff && go test -race -count=1 -v ./pkg/delivery && go test -race -count=1 -v ./app -run TestDeliveryHTTPRecovery)
