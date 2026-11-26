@@ -11,7 +11,7 @@ on:
       - "infra/check-transport.sh"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
-      - "docker-compose.yaml"
+      - "compose.yaml"
       - ".env.example"
       - "Makefile"
       - ".dockerignore"

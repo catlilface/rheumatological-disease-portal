@@ -6,7 +6,7 @@ on:
       - 'services/**'
       - 'contracts/**'
       - 'packages/service-runtime/**'
-      - 'docker-compose.yaml'
+      - 'compose.yaml'
       - '.dockerignore'
       - 'Makefile'
       - '.github/workflows/kubernetes.yml'

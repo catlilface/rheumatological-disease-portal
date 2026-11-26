@@ -29,13 +29,21 @@ topic="infra.$id"
 kbin=/opt/kafka/bin
 run kafka "$kbin/kafka-topics.sh" --bootstrap-server localhost:19092 --create --topic "$topic" --partitions 1 --replication-factor 1
 printf '%s\n' "$id" | run kafka "$kbin/kafka-console-producer.sh" --bootstrap-server localhost:19092 --topic "$topic"
-object() { run files python - "$1" "$id" <<'PY'
-import sys, urllib.request as u
-op, marker = sys.argv[1:]
+object() { run files python - "$1" "$id" "${2:-1}" <<'PY'
+import sys, time, urllib.error, urllib.request as u
+op, marker, attempts = sys.argv[1:]
 url = 'http://seaweedfs:8888/infra-smoke/' + marker
 req = u.Request(url, method=op, data=marker.encode() if op=='PUT' else None)
-with u.urlopen(req, timeout=10) as response:
-    if op=='GET': assert response.read()==marker.encode()
+for attempt in range(1, int(attempts) + 1):
+    try:
+        with u.urlopen(req, timeout=10) as response:
+            if op == 'GET': assert response.read() == marker.encode(), 'SeaweedFS marker mismatch'
+        break
+    except (TimeoutError, ConnectionError, urllib.error.URLError) as exc:
+        if isinstance(exc, urllib.error.HTTPError) and exc.code not in (502, 503, 504): raise
+        if attempt == int(attempts): raise
+        print(f'SeaweedFS {op}: {exc}; retrying ({attempt}/{attempts})', file=sys.stderr)
+        time.sleep(2)
 PY
 }
 point() { vector "$1" "$id" <<'PY'
@@ -56,7 +64,7 @@ object PUT; point PUT
 verify() {
   [[ $(sql "SELECT v FROM $id") == "$id" ]] || { echo 'SQL marker missing' >&2; exit 1; }
   [[ $(run kafka "$kbin/kafka-console-consumer.sh" --bootstrap-server localhost:19092 --topic "$topic" --from-beginning --max-messages 1 --timeout-ms 15000) == "$id" ]] || { echo 'Kafka marker missing' >&2; exit 1; }
-  object GET; point GET
+  object GET "${1:-1}"; point GET
 }
 verify
 if [[ $mode == compose ]]; then
@@ -65,7 +73,8 @@ else
   for s in "${stores[@]}"; do "${k[@]}" delete pod "$s-0"; done
   for s in "${stores[@]}"; do "${k[@]}" rollout status "statefulset/$s" --timeout=180s; done
 fi
-verify
+# Filer's root healthcheck can pass before reads from the restarted volume server are ready.
+verify 5
 sql "DROP TABLE $id"; object DELETE; point DELETE
 run kafka "$kbin/kafka-topics.sh" --bootstrap-server localhost:19092 --delete --topic "$topic"
 echo "OK: $mode, all four markers survived recreation"

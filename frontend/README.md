@@ -87,6 +87,24 @@ npm install       # заодно подключает git-хуки husky
 npm run dev       # dev-сервер Vite
 ```
 
+Откройте `http://localhost:5173`. Vite направляет запросы из `/api/` на
+`https://mis.clfs.wtf`. Браузер обращается к BFF через origin фронтенда,
+поскольку стенд ограничивает cross-origin запросы и использует сессионные cookie.
+Для локального Go BFF задайте `BFF_PROXY_TARGET=http://localhost:8000` перед
+запуском Vite.
+
+Маршруты MVP
+
+- `/screening` и `/screening/:screeningId` для новой и открытой анкеты.
+- `/results/:resultId/versions/:version` для конкретной версии результата.
+- `/library` и `/library/:slug` для библиотеки и статьи.
+- `/doctor` для материала о подготовке к приёму.
+
+HTTP-контракт доступен в [Scalar](https://mis.clfs.wtf/scalar) и в
+[OpenAPI BFF](../contracts/http/bff-v1.openapi.yaml).
+Пояснение к результату использует HTTP-команду с проверкой статуса операции.
+Для подключения WSS нужны согласованные маршрут BFF, формат сообщений и правила доступа.
+
 | Команда                | Что делает                     |
 | ---------------------- | ------------------------------ |
 | `npm run lint`         | линтер oxlint                  |
@@ -110,11 +128,12 @@ docker run --rm -p 8080:80 rheumatology-portal-frontend
 
 Настройки nginx задаются переменными окружения (значения по умолчанию указаны в `Dockerfile`, пример лежит в корневом `.env.example`):
 
-| Переменная                   | По умолчанию         | Назначение                                   |
-| ---------------------------- | -------------------- | -------------------------------------------- |
-| `NGINX_CLIENT_MAX_BODY_SIZE` | `100m`               | максимальный размер загружаемого файла       |
-| `NGINX_BACKEND_URL`          | `http://server:8000` | адрес бэкенда для `/api/` (HTTP и WebSocket) |
-| `NGINX_RESOLVER`             | `127.0.0.11`         | DNS для поиска бэкенда (DNS Docker)          |
+| Переменная                   | По умолчанию           | Назначение                                                                                             |
+| ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `NGINX_CLIENT_MAX_BODY_SIZE` | `100m`                 | максимальный размер загружаемого файла                                                                 |
+| `NGINX_BACKEND_URL`          | `https://mis.clfs.wtf` | origin BFF для `/api/`, включая схему и при необходимости порт                                         |
+| `NGINX_PUBLIC_ORIGIN`        | origin запроса         | публичный origin фронтенда при завершении TLS на внешнем прокси, например `https://portal.example.org` |
+| `NGINX_RESOLVER`             | DNS контейнера         | переопределение DNS для поиска BFF                                                                     |
 
 ```bash
 docker run --rm -p 8080:80 --env-file ../.env rheumatology-portal-frontend

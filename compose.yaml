@@ -1,0 +1,207 @@
+x-health: &health
+  interval: 10s
+  timeout: 8s
+  retries: 10
+  start_period: 15s
+
+# Временный билд, пока сервисы не реализованы
+x-build: &build
+  context: .
+  dockerfile: packages/service-runtime/Dockerfile
+
+x-grpc: &grpc
+  restart: unless-stopped
+  environment:
+    - PGHOST=postgres
+  networks:
+    - rpc
+    - databases
+  healthcheck:
+    <<: *health
+    test: [CMD, python, -c, "import grpc; from grpc_health.v1 import health_pb2 as p,health_pb2_grpc as g; assert g.HealthStub(grpc.insecure_channel('localhost:50051')).Check(p.HealthCheckRequest(),timeout=3).status==1"]
+
+x-worker: &worker
+  <<: *grpc
+  environment:
+    PGHOST: postgres
+    KAFKA_BOOTSTRAP_SERVERS: 'kafka:19092'
+  networks:
+    - rpc
+    - broker
+    - databases
+  depends_on:
+    kafka:
+      condition: service_healthy
+
+services:
+  frontend:
+    image: rdp-frontend:mvp
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - edge
+    environment:
+      NGINX_BACKEND_URL: ${NGINX_BACKEND_URL:-http://bff:8000}
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-100m}
+      NGINX_RESOLVER: ${NGINX_RESOLVER:-127.0.0.11}
+
+  bff:
+    image: rdp-bff:mvp
+    build:
+      context: .
+      dockerfile: services/bff/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    networks:
+      edge:
+        aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
+      rpc:
+    env_file:
+      - .env
+    healthcheck:
+      <<: *health
+      test: [CMD, wget, -q, -T, "4", -O, /dev/null, http://127.0.0.1:8000/health]
+
+  iam:
+    <<: *grpc
+    image: rdp-iam:mvp
+    build: {<<: *build, args: {SERVICE: iam}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro"]
+
+  files:
+    <<: *grpc
+    image: rdp-files:mvp
+    build: {<<: *build, args: {SERVICE: files}}
+    networks:
+      - rpc
+      - objects
+      - databases
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/files:/run/secrets/db-password:ro"]
+
+  screening:
+    <<: *worker
+    image: rdp-screening:mvp
+    build: {<<: *build, args: {SERVICE: screening}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro"]
+
+  content:
+    <<: *worker
+    image: rdp-content:mvp
+    build: {<<: *build, args: {SERVICE: content}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/content:/run/secrets/db-password:ro"]
+
+  reporting:
+    <<: *worker
+    image: rdp-reporting:mvp
+    build: {<<: *build, args: {SERVICE: reporting}}
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/reporting:/run/secrets/db-password:ro"]
+
+  ai:
+    image: rdp-ai:mvp
+    build: {<<: *build, args: {SERVICE: ai}}
+    restart: unless-stopped
+    environment: {PGHOST: postgres}
+    networks: [databases, vectors]
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/ai:/run/secrets/db-password:ro"]
+    healthcheck:
+      <<: *health
+      test: [CMD, python, database.py, ai]
+
+  db-bootstrap:
+    profiles: [tools]
+    image: postgres:18.7-alpine3.23
+    networks: [databases]
+    secrets: [postgres-password]
+    volumes:
+      - ./infra/db/bootstrap.sh:/bootstrap.sh:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/db:/credentials:ro
+    entrypoint: [sh, /bootstrap.sh]
+
+  db-migrate:
+    profiles: [tools]
+    image: ghcr.io/amacneil/dbmate:2.38.2
+    networks: [databases]
+    entrypoint: [sh, /db/migrate.sh]
+    volumes:
+      - ./infra/db:/db:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/db/migrators:/credentials:ro
+      - ./services/iam/migrations:/services/iam/migrations:ro
+      - ./services/screening/migrations:/services/screening/migrations:ro
+      - ./services/content/migrations:/services/content/migrations:ro
+      - ./services/reporting/migrations:/services/reporting/migrations:ro
+      - ./services/files/migrations:/services/files/migrations:ro
+      - ./services/ai/migrations:/services/ai/migrations:ro
+
+  kafka:
+    image: apache/kafka:4.4.0
+    restart: unless-stopped
+    networks:
+      - broker
+    env_file: infra/k8s/kafka.env
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      <<: *health
+      test: [CMD, /opt/kafka/bin/kafka-topics.sh, --bootstrap-server, localhost:19092, --list]
+
+  postgres:
+    image: postgres:18.7-alpine3.23
+    restart: unless-stopped
+    networks:
+      - databases
+    secrets:
+      - postgres-password
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      <<: *health
+      test: [CMD, pg_isready, -h, localhost, -U, postgres, -d, postgres]
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.54
+    command: [server, -dir=/data, -ip=localhost, -ip.bind=0.0.0.0, -filer, -master.volumeSizeLimitMB=64, -volume.max=8]
+    restart: unless-stopped
+    networks:
+      - objects
+    volumes:
+      - objects-data:/data
+    healthcheck:
+      <<: *health
+      test: [CMD, wget, -q, -O, /dev/null, 'http://localhost:8888/']
+
+  qdrant:
+    image: qdrant/qdrant:v1.20.2
+    restart: unless-stopped
+    networks:
+      - vectors
+    volumes:
+      - vectors-data:/qdrant/storage
+    healthcheck:
+      <<: *health
+      test: [CMD, bash, -ec, "exec 3<>/dev/tcp/127.0.0.1/6333; printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3; read -r line <&3; [[ $$line == *' 200 '* ]]"]
+
+secrets:
+  postgres-password:
+    file: ${MIS_SECRET_DIR:-./.secrets}/postgres-password
+networks:
+  edge:
+  rpc:
+    internal: true
+  broker:
+    internal: true
+  databases:
+    internal: true
+  objects:
+    internal: true
+  vectors:
+    internal: true
+volumes:
+  kafka-data:
+  postgres-data:
+  objects-data:
+  vectors-data:
