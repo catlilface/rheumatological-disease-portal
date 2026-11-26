@@ -2,26 +2,57 @@ name: Publish release images
 
 on:
   push:
-    tags: ['**']
+    branches: [main]
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  publish:
-    if: ${{ !github.event.deleted }}
+  frontend:
+    uses: ./.github/workflows/frontend.yml
+  services:
+    uses: ./.github/workflows/services.yml
+
+  version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    env:
-      TAG_NAME: ${{ github.ref_name }}
+    outputs:
+      tag: ${{ steps.semver.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Validate release tag and resolve image names
+        with:
+          fetch-depth: 0
+      - id: semver
         run: |
-          if ! [[ "$TAG_NAME" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
-            echo 'Git tag is not a valid Docker image tag' >&2
+          tag=$(python3 .github/next-version.py)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [version, frontend, services]
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      TAG_NAME: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refuse to overwrite an existing version
+        run: |
+          if git show-ref --verify --quiet "refs/tags/$TAG_NAME"; then
+            echo "Tag $TAG_NAME already exists" >&2
             exit 1
           fi
+
+      - name: Resolve image names
+        run: |
           cp .env.example .env
           docker compose -f compose.yaml --profile tools config --format json > "$RUNNER_TEMP/source.json"
           docker compose -f deploy.yml --profile tools config --format json > "$RUNNER_TEMP/release.json"
@@ -46,3 +77,11 @@ jobs:
             docker tag "$source" "$target"
             docker push "$target"
           done
+
+      - name: Create Git tag and GitHub Release with deployment bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          archive="portal-$TAG_NAME.tar.gz"
+          git archive --format=tar.gz -o "$archive" HEAD -- deploy.yml .env.example infra/db infra/k8s/kafka.env 'services/*/migrations/*'
+          gh release create "$TAG_NAME" "$archive" --target "$GITHUB_SHA" --title "$TAG_NAME" --generate-notes

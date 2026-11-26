@@ -1,9 +1,9 @@
 name: Services CI
 
 on:
-  push:
-    branches: [main]
-    paths: &build-paths
+  workflow_call:
+  pull_request:
+    paths:
       - "services/**"
       - "frontend/src/pages/cabinet/**"
       - "frontend/src/shared/api/**"
@@ -20,8 +20,6 @@ on:
       - "Makefile"
       - ".dockerignore"
       - ".github/workflows/services.yml"
-  pull_request:
-    paths: *build-paths
 
 concurrency:
   group: services-${{ github.ref }}
@@ -76,7 +74,6 @@ jobs:
         service: [bff, ai, content, files, iam, reporting, screening]
     permissions:
       contents: read
-      packages: write
     env:
       SERVICE: ${{ matrix.service }}
     steps:
@@ -106,13 +103,3 @@ jobs:
         run: |
           docker build -f packages/service-runtime/Dockerfile --build-arg "SERVICE=$SERVICE" \
             -t "rheumatology-portal-$SERVICE:ci" .
-
-      - name: Publish image to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rheumatology-portal-$SERVICE:$GITHUB_SHA"
-          docker tag "rheumatology-portal-$SERVICE:ci" "$image"
-          docker push "$image"

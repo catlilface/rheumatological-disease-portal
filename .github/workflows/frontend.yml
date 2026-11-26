@@ -1,11 +1,7 @@
 name: Frontend CI
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/frontend.yml"
+  workflow_call:
   pull_request:
     paths:
       - "frontend/**"
@@ -56,7 +52,6 @@ jobs:
     needs: checks
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -79,14 +74,3 @@ jobs:
             exit 1
           fi
           npm run test:integration
-
-      - name: Log in to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Push image to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rheumatology-portal-frontend:${GITHUB_SHA}"
-          docker tag rheumatology-portal-frontend:ci "$IMAGE"
-          docker push "$IMAGE"
