@@ -22,14 +22,15 @@ class LocalRegistry(BaseRegistry):
         scale, version = rules["id"], rules["weights_version"]
         with self._lock:
             key = (scale, version)
-            if key in self._versions:
-                if json.dumps(self._versions[key], sort_keys=True) != json.dumps(rules, sort_keys=True):
-                    raise RuleConfigError(
-                        version, "$.weights_version", f"rules for {scale!r} require a new version",
-                    )
+            if key not in self._versions:
+                self._versions[key] = rules
+                self._current[scale] = version
                 return
-            self._versions[key] = rules
-            self._current[scale] = version
+            if json.dumps(self._versions[key], sort_keys=True) == json.dumps(rules, sort_keys=True):
+                return
+            raise RuleConfigError(
+                version, "$.weights_version", f"rules for {scale!r} require a new version",
+            )
 
     def get(self, scale: str, version: str | None = None) -> dict:
         with self._lock:
