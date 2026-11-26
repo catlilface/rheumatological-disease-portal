@@ -43,7 +43,7 @@ func Root() (string, error) {
 	}
 }
 func Load(root string) (Settings, error) {
-	s := Settings{Name: "Rheumatological Disease Portal", Hosts: []string{"localhost", "127.0.0.1"}, CORS: CORS{Methods: []string{"GET"}, MaxAge: 600}}
+	s := Settings{Name: "Rheumatological Disease Portal", Hosts: []string{"localhost", "127.0.0.1", "bff", "server"}, CORS: CORS{Methods: []string{"GET"}, MaxAge: 600}}
 	file, err := godotenv.Read(filepath.Join(root, ".env"))
 	if err != nil && !os.IsNotExist(err) {
 		return s, errors.New("invalid .env")

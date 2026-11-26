@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -12,6 +13,9 @@ func TestSettings(t *testing.T) {
 	s, err := Load(dir)
 	if err != nil || s.Name != "Rheumatological Disease Portal" || s.Debug || s.CORS.MaxAge != 600 || len(s.CORS.Origins) != 0 {
 		t.Fatalf("unexpected defaults: %v", err)
+	}
+	if !slices.Contains(s.Hosts, "bff") || !slices.Contains(s.Hosts, "server") {
+		t.Fatalf("Compose upstream hosts missing from defaults: %v", s.Hosts)
 	}
 	file := `APP_NAME="Тестовый портал"
 DEBUG=true
