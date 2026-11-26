@@ -36,7 +36,7 @@ func (s Screening) Start(owner string, x Start) ([]models.Resource, error) {
 		return nil, models.Fail(models.Invalid, "DISCLAIMER_VERSION_MISMATCH")
 	}
 	session := models.StartSession(v, s.ID())
-	s.Sessions.Put(OwnedID{owner, session.ID}, session)
+	s.Sessions.Put(OwnedID{Owner: owner, ID: session.ID}, session)
 	return []models.Resource{models.Ref("screening", session.ID, session.Version)}, nil
 }
 
@@ -49,7 +49,7 @@ func (s Screening) Get(key OwnedID) (*models.Session, error) {
 }
 
 func (s Screening) Exact(owner string, ref models.ResultRef) (models.Result, error) {
-	v, ok := s.Results.Get(OwnedResult{owner, ref})
+	v, ok := s.Results.Get(OwnedResult{Owner: owner, ResultRef: ref})
 	if !ok {
 		return v, models.NotFound()
 	}
@@ -86,7 +86,7 @@ func (s Screening) change(key OwnedID, v int, action func(*models.Session) (bool
 	refs := []models.Resource{models.Ref("screening", session.ID, session.Version)}
 	if snapshot {
 		r := session.Snapshot(s.Definition, s.ID)
-		s.Results.Put(OwnedResult{key.Owner, r.ResultRef}, r)
+		s.Results.Put(OwnedResult{Owner: key.Owner, ResultRef: r.ResultRef}, r)
 		refs = append(refs, models.Ref("result", r.ID, r.Version))
 	}
 	s.Sessions.Put(key, session)
@@ -132,7 +132,7 @@ func (s Screening) Explain(owner string, ref models.ResultRef) ([]models.Resourc
 		Sources:    []SourceRef{s.ExplanationSource},
 		Disclaimer: r.Disclaimer,
 	}
-	s.Explanations.Put(OwnedResult{owner, ref}, explanation)
+	s.Explanations.Put(OwnedResult{Owner: owner, ResultRef: ref}, explanation)
 	return []models.Resource{models.Ref("result", ref.ID, ref.Version)}, nil
 }
 
@@ -140,7 +140,7 @@ func (s Screening) Explanation(owner string, ref models.ResultRef) (Explanation,
 	if _, err := s.Exact(owner, ref); err != nil {
 		return Explanation{}, err
 	}
-	v, ok := s.Explanations.Get(OwnedResult{owner, ref})
+	v, ok := s.Explanations.Get(OwnedResult{Owner: owner, ResultRef: ref})
 	if !ok {
 		return v, models.Fail(models.Missing, "EXPLANATION_NOT_READY")
 	}

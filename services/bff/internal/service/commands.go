@@ -30,7 +30,7 @@ type Commands struct {
 }
 
 func (s Commands) Run(actor, owner, key string, fingerprint idempotency.Fingerprint, apply func() ([]models.Resource, error)) (OperationKey, error) {
-	intent := IntentKey{actor, key}
+	intent := IntentKey{Actor: actor, Key: key}
 	if r, ok := s.Receipts.Get(intent); ok {
 		if fingerprint != r.Fingerprint {
 			return OperationKey{}, models.Fail(models.Conflict, "IDEMPOTENCY_KEY_REUSED")
@@ -47,9 +47,9 @@ func (s Commands) Run(actor, owner, key string, fingerprint idempotency.Fingerpr
 	} else if rs != nil {
 		op.Resources = rs
 	}
-	id := OperationKey{actor, owner, op.ID}
+	id := OperationKey{Actor: actor, Owner: owner, ID: op.ID}
 	s.Operations.Put(id, op)
-	s.Receipts.Put(intent, Receipt{fingerprint, id})
+	s.Receipts.Put(intent, Receipt{Fingerprint: fingerprint, Operation: id})
 	return id, nil
 }
 
@@ -57,7 +57,7 @@ func (s Commands) Get(a *models.Actor, owner, id string) (models.Operation, erro
 	if owner == OwnerCabinet && !a.Consent {
 		return models.Operation{}, models.Fail(models.Forbidden, "CONSENT_REQUIRED")
 	}
-	op, ok := s.Operations.Get(OperationKey{a.ID, owner, id})
+	op, ok := s.Operations.Get(OperationKey{Actor: a.ID, Owner: owner, ID: id})
 	if !ok {
 		return op, models.NotFound()
 	}

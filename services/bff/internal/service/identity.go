@@ -90,7 +90,7 @@ func (s Identity) Register(key, email, password string, consent MedicalConsent) 
 		return nil, err
 	}
 	a := &models.Actor{ID: s.ID(), Kind: models.MemberActor, Consent: true}
-	s.Accounts.Put(email, Account{a, hash})
+	s.Accounts.Put(email, Account{Actor: a, Hash: hash})
 	l := s.issue(a)
 	s.Retries.Put(k, l)
 	return l, nil
@@ -124,7 +124,7 @@ func (s Identity) Revoke(login *Login) {
 }
 
 func (s Identity) Rotate(cookie, key string) (*Login, error) {
-	k := ReplayKey{"refresh", key, cookie}
+	k := ReplayKey{Scope: "refresh", Key: key, Credential: cookie}
 	if l, ok := s.Retries.Get(k); ok {
 		return s.Session(l.Access)
 	}
@@ -135,6 +135,6 @@ func (s Identity) Rotate(cookie, key string) (*Login, error) {
 	s.Revoke(old)
 	l := s.issue(old.Actor)
 	s.Retries.Put(k, l)
-	s.Retries.Put(ReplayKey{"refresh", key, l.Refresh}, l)
+	s.Retries.Put(ReplayKey{Scope: "refresh", Key: key, Credential: l.Refresh}, l)
 	return l, nil
 }

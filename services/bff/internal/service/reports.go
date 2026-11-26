@@ -39,12 +39,12 @@ func (s Reports) Create(a *models.Actor, x models.ReportRequest) ([]models.Resou
 		}
 	}
 	r := models.Report{ID: s.ID(), Status: "ready", Specification: x, Snapshot: s.Now()}
-	s.Records.Put(OwnedID{a.ID, r.ID}, r)
+	s.Records.Put(OwnedID{Owner: a.ID, ID: r.ID}, r)
 	return []models.Resource{models.Ref("report", r.ID)}, nil
 }
 
 func (s Reports) Get(a *models.Actor, id string) (models.Report, error) {
-	r, ok := s.Records.Get(OwnedID{a.ID, id})
+	r, ok := s.Records.Get(OwnedID{Owner: a.ID, ID: id})
 	if !ok {
 		return r, models.NotFound()
 	}
@@ -71,7 +71,7 @@ func (s Reports) Issue(a *models.Actor, id, origin string) ([]models.Resource, e
 		URL:     origin + reportSharePath + "#" + token,
 	}
 	g := &models.Grant{Owner: a, Share: share}
-	s.Shares.Put(ShareKey{a.ID, id, share.ID}, g)
+	s.Shares.Put(ShareKey{Owner: a.ID, Report: id, Share: share.ID}, g)
 	s.Tokens.Put(token, g)
 	return []models.Resource{models.Ref("share", share.ID)}, nil
 }
@@ -80,7 +80,7 @@ func (s Reports) grant(a *models.Actor, id, share string) (*models.Grant, error)
 	if err := a.RequirePatient(); err != nil {
 		return nil, err
 	}
-	g, ok := s.Shares.Get(ShareKey{a.ID, id, share})
+	g, ok := s.Shares.Get(ShareKey{Owner: a.ID, Report: id, Share: share})
 	if !ok {
 		return nil, models.NotFound()
 	}
