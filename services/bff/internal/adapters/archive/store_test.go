@@ -6,6 +6,27 @@ import (
 	"testing"
 )
 
+func TestOperationWriteFailureRollsBackCabinetAndIntent(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "archive.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	_, err = s.RunCabinet("alice", "key", [32]byte{}, func(c *domain.Cabinet) (domain.Operation, error) {
+		// bbolt rejects the empty operation key after the snapshot has been written.
+		return domain.Operation{State: "succeeded"}, c.SetReminders(domain.ReminderSettings{Timezone: "Europe/Moscow"})
+	})
+	if err == nil {
+		t.Fatal("operation write should fail")
+	}
+	if used, err := s.HasCabinetIntent("alice", "key"); err != nil || used {
+		t.Fatal("partial receipt", err)
+	}
+	if c, err := s.Cabinet("alice"); err != nil || c.Reminders().Timezone != "UTC" {
+		t.Fatal("partial cabinet update", err)
+	}
+}
+
 func TestPatientHistoryAndCabinetSurviveRestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "archive.db")
 	open := func() *Store {
@@ -17,11 +38,9 @@ func TestPatientHistoryAndCabinetSurviveRestart(t *testing.T) {
 		return s
 	}
 	s := open()
-	c := domain.NewCabinet()
-	if err := c.SetReminders(domain.ReminderSettings{Timezone: "Europe/Moscow"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SaveCabinet("alice", c); err != nil {
+	if _, err := s.RunCabinet("alice", "key", [32]byte{}, func(c *domain.Cabinet) (domain.Operation, error) {
+		return domain.Operation{ID: "op", State: "succeeded"}, c.SetReminders(domain.ReminderSettings{Timezone: "Europe/Moscow"})
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, version := range []int{1, 2} {

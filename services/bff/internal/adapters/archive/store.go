@@ -22,37 +22,41 @@ func Open(path string) (*Store, error) {
 func resultKey(ref domain.ResultRef) []byte {
 	return []byte(fmt.Sprintf("%s/%020d", ref.ID, ref.Version))
 }
-func (s *Store) put(bucket string, key []byte, value any) error {
+func put(tx *bolt.Tx, bucket string, key []byte, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return s.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
-		if err != nil {
-			return err
-		}
-		return b.Put(key, data)
-	})
+	b, err := tx.CreateBucketIfNotExists([]byte(bucket))
+	if err != nil {
+		return err
+	}
+	return b.Put(key, data)
 }
-func (s *Store) SaveCabinet(owner string, c *domain.Cabinet) error {
-	return s.put("cabinets", []byte(owner), c)
+func get(tx *bolt.Tx, bucket string, key []byte) []byte {
+	if b := tx.Bucket([]byte(bucket)); b != nil {
+		return b.Get(key)
+	}
+	return nil
+}
+func loadCabinet(tx *bolt.Tx, owner string) (*domain.Cabinet, error) {
+	c := domain.NewCabinet()
+	if data := get(tx, "cabinets", []byte(owner)); data != nil {
+		return c, json.Unmarshal(data, c)
+	}
+	return c, nil
 }
 func (s *Store) Cabinet(owner string) (*domain.Cabinet, error) {
-	c := domain.NewCabinet()
+	var c *domain.Cabinet
 	err := s.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("cabinets"))
-		if b != nil {
-			if data := b.Get([]byte(owner)); data != nil {
-				return json.Unmarshal(data, c)
-			}
-		}
-		return nil
+		var err error
+		c, err = loadCabinet(tx, owner)
+		return err
 	})
 	return c, err
 }
 func (s *Store) SaveResult(owner string, r domain.Result) error {
-	return s.put("results/"+owner, resultKey(r.ResultRef), r)
+	return s.Update(func(tx *bolt.Tx) error { return put(tx, "results/"+owner, resultKey(r.ResultRef), r) })
 }
 func (s *Store) Result(owner string, ref domain.ResultRef) (domain.Result, error) {
 	var r domain.Result

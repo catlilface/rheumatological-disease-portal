@@ -350,7 +350,9 @@ func command[T any](a *API, id string, level access, owner string, apply func(*c
 	}))
 }
 func (a *API) accept(c *call, owner string, apply func() ([]domain.Resource, error)) (any, error) {
-	key, err := a.commands.Run(c.actor.ID, owner, c.values["Idempotency-Key"], c.fingerprint, apply)
+	return c.receipt(a.commands.Run(c.actor.ID, owner, c.id("Idempotency-Key"), c.fingerprint, apply))
+}
+func (c *call) receipt(key application.OperationKey, err error) (any, error) {
 	if err != nil {
 		return nil, err
 	}

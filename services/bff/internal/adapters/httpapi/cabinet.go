@@ -11,17 +11,9 @@ func (c *call) period() domain.Period {
 	return domain.Period{From: c.id("from_date"), To: c.id("to_date")}
 }
 func cabinetCommand[T any](a *API, s application.Cabinets, id string, apply func(patient, *call, T) ([]domain.Resource, error)) {
-	command(a, id, member, "cabinet", func(c *call, x T) ([]domain.Resource, error) {
-		p, err := s.For(c.actor)
-		if err != nil {
-			return nil, err
-		}
-		refs, err := apply(p, c, x)
-		if err != nil {
-			return nil, err
-		}
-		return refs, s.Save(c.actor, p)
-	})
+	a.on(id, member, bind(func(c *call, x T) (any, error) {
+		return c.receipt(a.commands.RunCabinet(c.actor, c.id("Idempotency-Key"), c.fingerprint, s, func(p patient) ([]domain.Resource, error) { return apply(p, c, x) }))
+	}))
 }
 func (a *API) Cabinet(s application.Cabinets) {
 	get := func(id string, f func(patient, *call) (any, error)) {

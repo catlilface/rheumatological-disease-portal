@@ -41,6 +41,9 @@ func build(root string, cfg config.Settings, identity httpapi.Identity, demo htt
 	commands := app.Commands{Runtime: rt,
 		Operations: memory.New[app.OperationKey, domain.Operation](), Receipts: memory.New[app.IntentKey, app.Receipt](),
 	}
+	if db != nil {
+		commands.Journal = db
+	}
 	api, err := httpapi.New(cfg, os.DirFS(filepath.Join(root, "contracts/http")), &memory.Transactions{}, identity, commands, demo)
 	if err != nil {
 		return nil, err

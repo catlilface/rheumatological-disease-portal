@@ -7,7 +7,6 @@ type Cabinets struct {
 	Records Store[string, *domain.Cabinet]
 	Archive interface {
 		Cabinet(string) (*domain.Cabinet, error)
-		SaveCabinet(string, *domain.Cabinet) error
 	}
 }
 
@@ -32,12 +31,6 @@ func (s Cabinets) For(a *domain.Actor) (PatientCabinet, error) {
 		s.Records.Put(a.ID, c)
 	}
 	return PatientCabinet{c, s.Runtime}, nil
-}
-func (s Cabinets) Save(a *domain.Actor, p PatientCabinet) error {
-	if s.Archive != nil {
-		return s.Archive.SaveCabinet(a.ID, p.record)
-	}
-	return nil
 }
 func (p PatientCabinet) Onboarding() domain.Onboarding { return p.record.Onboarding() }
 func (p PatientCabinet) Finish(x domain.OnboardingInput) ([]domain.Resource, error) {
