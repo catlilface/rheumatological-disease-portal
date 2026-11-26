@@ -23,3 +23,17 @@ test-infra:
 
 test-kind:
 	bash infra/kind/check.sh
+
+BFF_DELIVERY_COMPOSE := docker compose -f docker-compose.yaml -f infra/bff-delivery.compose.yaml
+
+.PHONY: up-bff-delivery test-bff-delivery
+
+up-bff-delivery:
+	@MIS_BFF_DB=true sh infra/db/prepare.sh
+	$(BFF_DELIVERY_COMPOSE) up -d --wait postgres kafka
+	$(BFF_DELIVERY_COMPOSE) run --rm --no-deps db-bootstrap
+	$(BFF_DELIVERY_COMPOSE) run --rm --no-deps db-migrate
+	$(BFF_DELIVERY_COMPOSE) up --build -d --wait bff
+
+test-bff-delivery:
+	bash infra/db/test-bff-delivery.sh

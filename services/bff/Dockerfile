@@ -3,8 +3,10 @@ WORKDIR /src
 COPY services/bff/go.mod services/bff/go.sum ./
 RUN go mod download
 COPY services/bff/internal ./internal
+COPY services/bff/pkg ./pkg
+COPY services/bff/app ./app
 COPY services/bff/cmd ./cmd
-RUN CGO_ENABLED=0 go build -trimpath -o /out/bff ./cmd/bff
+RUN CGO_ENABLED=0 go build -trimpath -o /out/bff ./cmd/server
 
 FROM alpine:3.23
 # nc is used only by the Compose/Kubernetes network-isolation smoke check.

@@ -15,7 +15,7 @@ SERVICE = Path(__file__).resolve().parents[1]
 def executable(tmp_path_factory):
     tmp = tmp_path_factory.mktemp('go-bff')
     (tmp / 'contracts').symlink_to(SERVICE.parents[1] / 'contracts', target_is_directory=True)
-    subprocess.run(['go', 'build', '-o', str(tmp / 'bff'), './cmd/bff'], cwd=SERVICE, check=True)
+    subprocess.run(['go', 'build', '-o', str(tmp / 'bff'), './cmd/server'], cwd=SERVICE, check=True)
     (tmp / 'ssl.cnf').write_text('[req]\nprompt=no\ndistinguished_name=name\nx509_extensions=ext\n'
                                  '[name]\nCN=localhost\n[ext]\nsubjectAltName=DNS:localhost\nbasicConstraints=CA:TRUE\n')
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
