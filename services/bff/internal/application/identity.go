@@ -42,7 +42,7 @@ type Identity struct {
 func (s Identity) issue(a *domain.Actor) *Login {
 	now := s.Now()
 	roles := map[string][]string{"guest": {}, "member": {"patient"}, "staff": {"admin"}}
-	l := &Login{Actor: a, Access: s.Token(), Refresh: s.Token(), Expires: now.Add(30 * 24 * time.Hour), AccessExpires: now.Add(168 * time.Hour), Roles: roles[a.Kind]}
+	l := &Login{Actor: a, SessionID: s.ID(), Access: s.Token(), Refresh: s.Token(), Expires: now.Add(30 * 24 * time.Hour), AccessExpires: now.Add(168 * time.Hour), Roles: roles[a.Kind]}
 	s.Access.Put(l.Access, l)
 	s.Refreshes.Put(l.Refresh, l)
 	return l

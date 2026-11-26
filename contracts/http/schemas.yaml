@@ -58,8 +58,8 @@ $defs:
     properties: {email: *email, password: {type: string, format: password, writeOnly: true, minLength: 12, maxLength: 256}, medical_data_consent: {$ref: '#/$defs/Consent'}}
   Principal:
     type: object
-    required: [kind, roles, session_expires_at]
-    properties: {kind: {enum: [guest, member, staff]}, roles: {type: array, maxItems: 1, items: {enum: [patient, editor, admin]}}, session_expires_at: *instant}
+    required: [kind, roles, session_id, session_expires_at]
+    properties: {session_id: *id, kind: {enum: [guest, member, staff]}, roles: {type: array, maxItems: 1, items: {enum: [patient, editor, admin]}}, session_expires_at: *instant}
   # Скрининг: порядок блоков/вопросов принадлежит данной редакции анкеты.
   DisclaimerFields:
     type: object

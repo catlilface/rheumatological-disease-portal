@@ -3,11 +3,12 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { chromium } from 'playwright-core'
 
+const origin = process.env.PORTAL_ORIGIN ?? 'http://localhost:8080'
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const context = await browser.newContext()
   const page = await context.newPage()
-  await page.goto('http://localhost:8080/cabinet')
+  await page.goto(origin + '/cabinet')
   await page.getByRole('button', { name: 'Войти в кабинет' }).waitFor()
   const email = `${randomUUID()}@example.test`
   const password = randomUUID()
@@ -84,8 +85,62 @@ try {
   assert.match(page.url(), /\/results\/[^/]+\/versions\/1$/)
   await page.getByRole('button', { name: 'Получить пояснение' }).click()
   await page.getByText(/Демонстрационный уровень:/).waitFor()
+  // The tabs share cookies, not forms. A switch can beat any focus/broadcast handler.
+  const other = await context.newPage()
+  await other.goto(origin + '/cabinet')
+  await page.goto(origin + '/cabinet')
+  await page.getByRole('heading', { name: 'Тестовый пациент' }).waitFor()
+  await page.getByText('Добавить препарат', { exact: true }).click()
+  await page.getByLabel('Название препарата').fill('Старый черновик')
+  await page.getByLabel('Дозировка').fill('тест')
+  await page.getByLabel('Время приёма').fill('09:00')
+  await page.getByLabel('Дата начала').fill('2026-01-01')
+  await other.evaluate(async () => {
+    const r = await fetch('/api/v1/auth/registrations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Portal-Request': '1',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({
+        email: `${crypto.randomUUID()}@example.test`,
+        password: crypto.randomUUID(),
+        medical_data_consent: { accepted: true, version: 'demo-medical-v1' },
+      }),
+    })
+    if (r.status !== 201) throw Error(`second registration: ${r.status}`)
+  })
+  const rejected = page.waitForResponse(
+    (r) =>
+      r.url().endsWith('/me/medications') && r.request().method() === 'POST',
+  )
+  await page
+    .getByRole('button', { name: 'Сохранить препарат' })
+    .evaluate((button) => button.form.requestSubmit())
+  const response = await rejected
+  assert.equal(response.status(), 409)
+  assert.equal((await response.json()).code, 'SESSION_CHANGED')
+  await page.getByLabel('Имя', { exact: true }).waitFor()
+  assert.equal(await page.getByLabel('Название препарата').inputValue(), '')
+  assert.equal(
+    await page.evaluate(
+      async () => (await (await fetch('/api/v1/me/medications')).json()).total,
+    ),
+    0,
+  )
+
+  // A normal sign-out/in must also invalidate the other tab without submitting or refocusing it.
+  await other.reload()
+  await other.getByRole('button', { name: 'Выйти', exact: true }).click()
+  await page.getByRole('button', { name: 'Войти в кабинет' }).waitFor()
+  await other.getByLabel('Электронная почта').fill(email)
+  await other.getByLabel('Пароль').fill(password)
+  await other.getByRole('button', { name: 'Войти в кабинет' }).click()
+  await page.getByRole('heading', { name: 'Тестовый пациент' }).waitFor()
+  await page.getByText('Тестовый препарат — тест').waitFor()
   console.log(
-    'PASS: guest screening → patient registration → refresh → cabinet → sign in → result',
+    'PASS: patient journey, result explanation and cross-tab cabinet isolation',
   )
 } finally {
   await browser.close()

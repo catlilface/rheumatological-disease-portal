@@ -36,6 +36,8 @@ components:
     refresh: {type: apiKey, in: cookie, name: portal_refresh, description: Ротируемая HttpOnly cookie; Secure; SameSite=Strict; Path=/api/v1/auth/session.}
   parameters:
     BrowserRequest: {in: header, name: X-Portal-Request, required: true, description: Проверяется вместе с допустимым Origin; непростой CORS-запрос, schema: {type: string, const: '1'}}
+    SessionHint: &sessionHint {in: header, name: X-Portal-Session, required: false, description: Несекретный session_id из сессии открытия формы. Не заменяет cookie. При смене сессии ответ 409 SESSION_CHANGED., schema: {type: string, format: uuid}}
+    FormSession: &formSession {<<: *sessionHint, required: true}
     Key: {in: header, name: Idempotency-Key, required: true, description: Новый случайный ключ для одного намерения; тот же при транспортном повторе, schema: {type: string, format: uuid}}
     Limit: {in: query, name: limit, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
     Offset: {in: query, name: offset, schema: {type: integer, minimum: 0, default: 0}}
@@ -75,8 +77,11 @@ components:
     ForumWriteDenied: &forum403
       description: Гость не может отправлять сообщения или жалобы (`REGISTRATION_REQUIRED`). Для записи также нужны доверенный `Origin` и `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`).
       content: *errorBody
+    SessionChanged: &changed409
+      description: Сессия формы изменилась (`SESSION_CHANGED`). Перечитайте кабинет, не повторяйте старый ввод.
+      content: *errorBody
     IntentConflict: &key409
-      description: Этот пользователь уже передал тот же `Idempotency-Key` для другого метода, пути или тела (`IDEMPOTENCY_KEY_REUSED`). Повторяйте исходный запрос без изменений; для нового действия нужен новый ключ.
+      description: Для записи в кабинет смена сессии формы даёт `SESSION_CHANGED`. Также этот пользователь уже передал тот же `Idempotency-Key` для другого метода, пути или тела (`IDEMPOTENCY_KEY_REUSED`). Повторяйте исходный запрос без изменений; для нового действия нужен новый ключ.
       content: *errorBody
     InvalidKey: &key422
       description: Заголовок `Idempotency-Key` отсутствует или не содержит UUID (`VALIDATION_ERROR`). Тело не требуется; если оно отправлено, лимит — 1 МиБ.
@@ -201,8 +206,9 @@ paths:
       operationId: signOut
       summary: Выйти
       description: Закрывает текущую сессию и удаляет из браузера обе cookie — для доступа и для обновления сессии.
-      parameters: [*csrf]
+      parameters: [*csrf, *sessionHint]
       responses:
+        '409': *changed409
         '204': {description: Сессия закрыта; Set-Cookie очищает cookie}
         '400': *write400
         '401': *session401
@@ -232,19 +238,21 @@ paths:
       operationId: withdrawMedicalConsent
       summary: Отозвать согласие
       description: Отзыв согласия на обработку медицинских данных закрывает доступ к медицинским данным кабинета и врачебным отчётам, в том числе по ранее выданным ссылкам.
-      parameters: [*csrf]
+      parameters: [*csrf, *formSession]
       responses:
+        '409': *changed409
         '204': {description: Отзыв зафиксирован для всех сессий пациента}
         '503': *iam503
         '400': *write400
         '401': *session401
         '403': {description: 'Нет доверенного `Origin` или заголовка `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`). Гость получает `REGISTRATION_REQUIRED`, а служебная учётная запись — `PATIENT_REQUIRED`: отозвать согласие может только пациент.', content: *errorBody}
-        '422': *unexpectedBody422
+        '422': {description: 'Не передан UUID в `X-Portal-Session` или ошибочно отправленное тело нельзя прочитать (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
   /operations/{owner}/{operation_id}:
     parameters:
       - {in: path, name: owner, required: true, schema: {enum: [screening, reporting, files, ai, cabinet, community]}}
       - {in: path, name: operation_id, required: true, schema: &id {$ref: 'schemas.yaml#/$defs/Id'}}
+      - *sessionHint
     get:
       tags: [Статусы операций]
       operationId: getOperation
@@ -254,6 +262,7 @@ paths:
         '200': {description: 'Статус прочитан. Даже при `rejected` или `failed` это успешное чтение: причину отказа смотрите в `error.code`.', content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Operation'}}}}
         '400': *host400
         '401': *session401
+        '409': *changed409
         '403': {description: 'Для чтения статуса операции кабинета (`owner=cabinet`) нет действующего согласия (`CONSENT_REQUIRED`).', content: *errorBody}
         '404': {description: 'У инициатора нет операции с таким ID в указанном сервисе (`NOT_FOUND`). Используйте `status_url` из исходного ответа; чужие операции не видны.', content: *errorBody}
         '422': {description: 'Неизвестное значение `owner` или `operation_id` не является UUID (`VALIDATION_ERROR`).', content: *errorBody}
@@ -488,8 +497,9 @@ paths:
       tags: [Кабинет и дневник]
       operationId: listScreeningResults
       summary: Все версии собственных результатов скрининга
-      parameters: [*limit, *offset]
+      parameters: [*limit, *offset, *sessionHint]
       responses:
+        '409': *changed409
         '200': {description: Страница собственных результатов, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ScreeningResultPage'}}}}
         '401': *session401
         '400': *host400
@@ -503,7 +513,10 @@ paths:
       operationId: getOnboarding
       summary: Проверить заполнение профиля
       description: Возвращает диагноз, препараты и настройки напоминаний пациента. Поле `completed` показывает, завершено ли первичное заполнение.
+      parameters: [*sessionHint]
       responses:
+        '409': *changed409
+        '422': {description: Некорректный UUID сессии формы, content: *errorBody}
         '200': {description: До заполнения completed=false, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Onboarding'}}}}
         '400': *host400
         '401': *session401
@@ -514,7 +527,7 @@ paths:
       operationId: finishOnboarding
       summary: Завершить настройку профиля
       description: Сохраняет диагноз, препараты и настройки напоминаний одним запросом. После завершения повторная команда с новым ключом идемпотентности будет отклонена.
-      parameters: *command
+      parameters: &cabinetCommand [*csrf, *key, *formSession]
       requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/OnboardingInput'}}}}
       responses:
         '202': {description: 'Проверьте `status_url`. Если профиль уже заполнен, новая команда будет отклонена с `ONBOARDING_COMPLETED`.', headers: *receiptHeaders, content: *receiptBody}
@@ -544,7 +557,7 @@ paths:
       operationId: createDiaryEntry
       summary: Добавить запись
       description: Сохраняет показатели симптомов на указанную дату, в том числе боль, длительность скованности и усталость. К записи можно добавить заметку.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: &diary {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/DiaryInput'}}}}
       responses:
         '202': *accepted
@@ -575,7 +588,7 @@ paths:
       operationId: replaceDiaryEntry
       summary: Изменить запись
       description: Заменяет содержимое записи целиком. Передайте все обязательные показатели, даже если изменилось только одно значение.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: *diary
       responses:
         '202': &diaryReceipt {description: 'Проверьте `status_url`. Если записи с указанным ID нет в дневнике пациента, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
@@ -591,7 +604,7 @@ paths:
       operationId: deleteDiaryEntry
       summary: Удалить запись
       description: Удаляет из дневника запись с указанным `entry_id`. Успешное выполнение операции означает, что запись больше недоступна.
-      parameters: *command
+      parameters: *cabinetCommand
       responses:
         '202': *diaryReceipt
         '400': *write400
@@ -620,7 +633,7 @@ paths:
       operationId: addMedication
       summary: Добавить препарат
       description: Сохраняет схему, которую указал пациент. Передайте название, дозу, время приёма по местному времени и дату начала. Дата окончания необязательна.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: &med {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/MedicationInput'}}}}
       responses:
         '202': *accepted
@@ -638,7 +651,7 @@ paths:
       operationId: updateMedication
       summary: Изменить схему приёма
       description: Обновляет дозу и расписание препарата для будущих приёмов. Уже сделанные отметки остаются в журнале.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: *med
       responses:
         '202': &medReceipt {description: 'Проверьте `status_url`. Если у пациента нет препарата с этим ID, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
@@ -654,7 +667,7 @@ paths:
       operationId: stopMedication
       summary: Остановить расписание
       description: Прекращает планирование приёмов выбранного препарата. Ранее отмеченные приёмы и пропуски остаются в журнале.
-      parameters: *command
+      parameters: *cabinetCommand
       responses:
         '202': *medReceipt
         '400': *write400
@@ -685,7 +698,7 @@ paths:
       operationId: markIntake
       summary: Отметить приём
       description: Сохраняет или исправляет отметку для одного запланированного приёма. Используйте `taken`, если препарат принят, или `missed`, если приём пропущен.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Intake'}}}}
       responses:
         '202': {description: 'Проверьте `status_url`. Если в расписании пациента нет этого приёма, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
@@ -713,7 +726,7 @@ paths:
       operationId: updateReminderSettings
       summary: Настроить напоминания
       description: Сохраняет выбранные каналы и часовой пояс IANA. Чтобы отключить напоминания, передайте `false` в поле `enabled`.
-      parameters: *command
+      parameters: *cabinetCommand
       requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/ReminderSettings'}}}}
       responses:
         '202': *accepted
@@ -745,7 +758,7 @@ paths:
       operationId: readNotification
       summary: Отметить как прочитанное
       description: Меняет статус одного уведомления. Оно остаётся в общей ленте, но больше не попадает в выборку непрочитанных.
-      parameters: *command
+      parameters: *cabinetCommand
       responses:
         '202': {description: 'Проверьте `status_url`. Если такого уведомления нет у текущего пациента, команда будет отклонена с `NOT_FOUND`.', headers: *receiptHeaders, content: *receiptBody}
         '400': *write400

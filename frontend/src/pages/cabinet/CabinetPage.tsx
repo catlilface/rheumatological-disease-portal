@@ -1,13 +1,19 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Link } from 'react-router'
 import { bff, BffError, type Command } from '@shared/api/client'
 import { useBffCommand, useBffQuery } from '@shared/api/useBff'
+import { onSessionChange } from '@shared/api/sessionChange'
 import { RequestStatus } from '@shared/ui/RequestStatus'
 import { resultRoute } from '@shared/routes'
 import { t } from '@shared/i18n'
 
-function PatientData() {
-  const profile = useBffQuery(bff.profile)
+function PatientData({ session }: { session: string }) {
+  const profile = useBffQuery(
+    useCallback(
+      (signal: AbortSignal) => bff.profile(session, signal),
+      [session],
+    ),
+  )
   const change = useBffCommand<void>()
   function save(task: Command<unknown>) {
     void change.run(async (signal, pending) => {
@@ -21,7 +27,10 @@ function PatientData() {
       : undefined
   const [offset, setOffset] = useState(0)
   const history = useBffQuery(
-    useCallback((signal: AbortSignal) => bff.history(offset, signal), [offset]),
+    useCallback(
+      (signal: AbortSignal) => bff.history(session, offset, signal),
+      [session, offset],
+    ),
   )
   const limit =
     history.state.status === 'success' ? history.state.data.limit : 20
@@ -41,6 +50,7 @@ function PatientData() {
                 const data = new FormData(e.currentTarget)
                 save(
                   bff.finishProfile(
+                    session,
                     String(data.get('name')),
                     String(data.get('diagnosis')) || null,
                     reminders,
@@ -85,6 +95,7 @@ function PatientData() {
                 const data = new FormData(e.currentTarget)
                 save(
                   bff.addMedication(
+                    session,
                     String(data.get('name')),
                     String(data.get('dose')),
                     String(data.get('time')),
@@ -155,10 +166,39 @@ function PatientData() {
   )
 }
 
+function useCabinetSession() {
+  const { state, reload } = useBffQuery(bff.principal)
+  const session = state.status === 'success' ? state.data.session_id : undefined
+  useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+    // On resume, catch cookie changes made without a broadcast. Keep same-session drafts.
+    function revalidate() {
+      if (document.visibilityState === 'hidden') return
+      void bff.principal(signal).then(
+        (current) => {
+          if (!signal.aborted && session !== current.session_id) reload()
+        },
+        () => {
+          if (!signal.aborted && session !== undefined) reload()
+        },
+      )
+    }
+    window.addEventListener('focus', revalidate, { signal })
+    window.addEventListener('pageshow', revalidate, { signal })
+    document.addEventListener('visibilitychange', revalidate, { signal })
+    const unsubscribe = onSessionChange(reload)
+    return () => {
+      controller.abort()
+      unsubscribe()
+    }
+  }, [session, reload])
+  return { state, reload }
+}
+
 export function CabinetPage() {
-  const session = useBffQuery(bff.principal)
+  const { state, reload } = useCabinetSession()
   const action = useBffCommand<void>()
-  const state = session.state
   const needsLogin =
     (state.status === 'success' && state.data.kind === 'guest') ||
     (state.status === 'error' &&
@@ -180,7 +220,6 @@ export function CabinetPage() {
                 String(data.get('password')),
                 signal,
               )
-              session.reload()
             }, false)
           }}
         >
@@ -202,24 +241,26 @@ export function CabinetPage() {
       ) : state.status === 'success' ? (
         <>
           {state.data.roles.includes('patient') ? (
-            <PatientData />
+            <PatientData
+              key={state.data.session_id}
+              session={state.data.session_id}
+            />
           ) : (
             <p>{t('cabinet.patientOnly')}</p>
           )}
           <button
             disabled={action.busy}
             onClick={() =>
-              void action.run(async (signal) => {
-                await bff.signOut(signal)
-                session.reload()
-              })
+              void action.run((signal) =>
+                bff.signOut(state.data.session_id, signal),
+              )
             }
           >
             {t('cabinet.logout')}
           </button>
         </>
       ) : (
-        <RequestStatus {...state} onRetry={session.reload} />
+        <RequestStatus {...state} onRetry={reload} />
       )}
       <RequestStatus {...action.state} />
     </section>

@@ -155,6 +155,7 @@ async def register(api, email='patient@example.test'):
 async def test_cabinet_links_and_mutations(api):
     from datetime import UTC, datetime
     await register(api)
+    api.headers['X-Portal-Session'] = (await api.get(BASE + '/auth/session')).json()['session_id']
     today = datetime.now(UTC).date().isoformat()
     med = {'name': 'Демо', 'dose_text': 'Тест', 'local_times': ['08:00'], 'starts_on': today}
     prefs = {'enabled': True, 'timezone': 'UTC', 'channels': ['email']}
@@ -210,7 +211,8 @@ async def test_doctor_report_and_revocable_link(api):
     assert (await api.post(BASE + '/shared-reports/download', json=token)).status_code == 410
     ids = await success(api, 'POST', shares)
     link = (await api.get(BASE + shares + '/' + ids['share'])).json()
-    assert (await api.delete(BASE + '/me/medical-data-consent')).status_code == 204
+    session = (await api.get(BASE + '/auth/session')).json()['session_id']
+    assert (await api.delete(BASE + '/me/medical-data-consent', headers={'X-Portal-Session': session})).status_code == 204
     assert (await api.get(report['download_url'])).status_code == 403
     assert (await api.post(BASE + '/shared-reports/download', json={'token': link['url'].split('#')[1]})).status_code == 410
 

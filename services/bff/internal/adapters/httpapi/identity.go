@@ -22,7 +22,7 @@ func (x credentials) Validate() error {
 	return nil
 }
 func principal(l *application.Login) any {
-	return map[string]any{"kind": l.Actor.Kind, "roles": l.Roles, "session_expires_at": l.Expires}
+	return map[string]any{"kind": l.Actor.Kind, "roles": l.Roles, "session_id": l.SessionID, "session_expires_at": l.Expires}
 }
 func sessionCookies(c *call, l *application.Login) {
 	for _, refresh := range []bool{false, true} {

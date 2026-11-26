@@ -17,10 +17,12 @@ import (
 	"portal/bff/internal/domain"
 )
 
+const testSession = "01980000-0000-7000-8000-000000000001"
+
 type testPatient struct{ httpapi.Identity }
 
 func (testPatient) Session(context.Context, string) (*app.Login, error) {
-	return &app.Login{Actor: &domain.Actor{ID: "patient", Kind: "member", Consent: true}, SessionID: "session"}, nil
+	return &app.Login{Actor: &domain.Actor{ID: "patient", Kind: "member", Consent: true}, SessionID: testSession}, nil
 }
 func (testPatient) Check(context.Context, *app.Login, string, domain.Resource, string) (time.Time, error) {
 	return time.Now().Add(time.Second), nil
@@ -49,6 +51,7 @@ func TestCabinetReceiptSurvivesBFFRestart(t *testing.T) {
 			r.Header.Set("Origin", "https://localhost")
 			r.Header.Set("X-Portal-Request", "1")
 			r.Header.Set("Idempotency-Key", key)
+			r.Header.Set("X-Portal-Session", testSession)
 			w := httptest.NewRecorder()
 			api.ServeHTTP(w, r)
 			if w.Code != status {

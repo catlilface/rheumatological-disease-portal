@@ -14,8 +14,11 @@ import type {
   Start,
   Survey,
 } from './contracts'
+import { notifySessionChange } from './sessionChange'
 
 const prefix = '/api/v1'
+const sessionHeaders = (session?: string): Record<string, string> =>
+  session ? { 'X-Portal-Session': session } : {}
 const segment = encodeURIComponent
 const resultPath = ({ result_id, version }: ResultRef) =>
   '/results/' + segment(result_id) + '/versions/' + segment(String(version))
@@ -92,6 +95,7 @@ export function createBffClient(
     }
     if (!response.ok) {
       const body = await response.json().catch(() => null)
+      if (body?.code === 'SESSION_CHANGED') notifySessionChange()
       throw new BffError(
         typeof body?.code === 'string' ? body.code : 'HTTP_ERROR',
         response.status,
@@ -155,16 +159,21 @@ export function createBffClient(
     }
   }
 
-  const get = async <T>(path: string, signal: AbortSignal) =>
-    json<T>(await request(prefix + path, signal))
+  const get = async <T>(path: string, signal: AbortSignal, session?: string) =>
+    json<T>(
+      await request(prefix + path, signal, {
+        headers: sessionHeaders(session),
+      }),
+    )
 
-  function post(path: string, body?: object, key?: string) {
+  function post(path: string, body?: object, key?: string, session?: string) {
     return {
       path: prefix + path,
       init: {
         method: 'POST',
         headers: {
           'X-Portal-Request': '1',
+          ...sessionHeaders(session),
           ...(body && { 'Content-Type': 'application/json' }),
           ...(key && { 'Idempotency-Key': key }),
         },
@@ -177,8 +186,9 @@ export function createBffClient(
     path: string,
     body?: object,
     method = 'POST',
+    session?: string,
   ): Command<Operation> {
-    const { path: url, init } = post(path, body, crypto.randomUUID())
+    const { path: url, init } = post(path, body, crypto.randomUUID(), session)
     init.method = method
     let accepted: { receipt: Receipt; delay: number } | undefined
     return async (signal, onPending) => {
@@ -200,7 +210,9 @@ export function createBffClient(
       for (let attempt = 0; attempt < 30; attempt += 1) {
         if (delay) await wait(Math.min(delay, 15_000), signal)
         const operation = await json<Operation>(
-          await request(statusUrl, signal),
+          await request(statusUrl, signal, {
+            headers: sessionHeaders(session),
+          }),
         )
         if (operation.operation_id !== receipt.operation_id)
           throw new BffError('INVALID_RESPONSE')
@@ -238,7 +250,11 @@ export function createBffClient(
       } catch (error) {
         if (!(error instanceof BffError) || error.code !== 'SESSION_REQUIRED')
           throw error
-        return json<Principal>(await request(path, signal, init))
+        const principal = await json<Principal>(
+          await request(path, signal, init),
+        )
+        notifySessionChange(true)
+        return principal
       }
     }
   }
@@ -248,15 +264,19 @@ export function createBffClient(
     principal: (signal: AbortSignal) => get<Principal>('/auth/session', signal),
     async signIn(email: string, password: string, signal: AbortSignal) {
       const { path, init } = post('/auth/session', { email, password })
-      return json<Principal>(await send(path, signal, init))
+      const principal = await json<Principal>(await send(path, signal, init))
+      notifySessionChange(true)
+      return principal
     },
-    async signOut(signal: AbortSignal) {
+    async signOut(session: string, signal: AbortSignal) {
       await request(prefix + '/auth/session', signal, {
         method: 'DELETE',
-        headers: { 'X-Portal-Request': '1' },
+        headers: { 'X-Portal-Request': '1', ...sessionHeaders(session) },
       })
+      notifySessionChange(true)
     },
     finishProfile: (
+      session: string,
       name: string,
       diagnosis: string | null,
       reminders: { enabled: boolean; timezone: string; channels: string[] },
@@ -265,20 +285,27 @@ export function createBffClient(
         '/me/onboarding',
         { name, diagnosis, reminders, medications: [] },
         'PUT',
+        session,
       ),
     addMedication: (
+      session: string,
       name: string,
       dose_text: string,
       time: string,
       starts_on: string,
     ) =>
-      command('/me/medications', {
-        name,
-        dose_text,
-        local_times: [time],
-        starts_on,
-      }),
-    profile: (signal: AbortSignal) =>
+      command(
+        '/me/medications',
+        {
+          name,
+          dose_text,
+          local_times: [time],
+          starts_on,
+        },
+        'POST',
+        session,
+      ),
+    profile: (session: string, signal: AbortSignal) =>
       get<{
         name?: string
         completed: boolean
@@ -288,11 +315,12 @@ export function createBffClient(
           medication_id: string
           regimen: { name: string; dose_text: string }
         }[]
-      }>('/me/onboarding', signal),
-    history: (offset: number, signal: AbortSignal) =>
+      }>('/me/onboarding', signal, session),
+    history: (session: string, offset: number, signal: AbortSignal) =>
       get<{ items: Result[]; total: number; limit: number }>(
         '/me/screening-results?offset=' + offset,
         signal,
+        session,
       ),
     survey: (
       signal: AbortSignal,

@@ -236,6 +236,9 @@ func (a *API) authorize(c *call, id string, level access) error {
 	if err != nil {
 		return err
 	}
+	if expected := c.id("X-Portal-Session"); expected != "" && expected != l.SessionID {
+		return domain.Fail(domain.Conflict, "SESSION_CHANGED")
+	}
 	c.login, c.actor = l, l.Actor
 	if a.demoRegister == nil && mvpResources[id] != "" {
 		return a.checkResource(c, id)

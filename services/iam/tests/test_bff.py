@@ -44,7 +44,7 @@ class BrowserIdentity(unittest.TestCase):
 
     def test_consent_withdrawal_applies_to_all_patient_sessions(self):
         account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
-        _, first = self.request('POST', '/auth/registrations', 201, data={**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}})
+        principal, first = self.request('POST', '/auth/registrations', 201, data={**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}})
         _, second = self.request('POST', '/auth/session', 200, data=account)
         self.request('GET', '/me/onboarding', 200, cookie=second['portal_session'].value)
         spec = {'kind': 'doctor', 'from_date': '2026-01-01', 'to_date': '2026-01-02', 'sections': ['diary']}
@@ -54,13 +54,30 @@ class BrowserIdentity(unittest.TestCase):
         self.assertEqual(self.request('GET', report, 200, cookie=second['portal_session'].value)[0]['specification'], spec)
         self.assertTrue(self.request('GET', report + '/pdf', 200, cookie=second['portal_session'].value)[0].startswith(b'%PDF-'))
         for _ in range(2):
-            self.request('DELETE', '/me/medical-data-consent', 204, cookie=first['portal_session'].value)
+            self.request('DELETE', '/me/medical-data-consent', 204, cookie=first['portal_session'].value, headers={'X-Portal-Session': principal['session_id']})
         _, new_login = self.request('POST', '/auth/session', 200, data=account)
         for jar in (first, second, new_login):
             error, _ = self.request('GET', '/me/onboarding', 403, cookie=jar['portal_session'].value)
             self.assertEqual(error['code'], 'CONSENT_REQUIRED')
             self.request('GET', report + '/pdf', 403, cookie=jar['portal_session'].value)
             self.request('POST', '/reports', 403, data=spec, cookie=jar['portal_session'].value)
+
+    def test_cabinet_form_is_bound_to_the_session_that_loaded_it(self):
+        account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
+        old, _ = self.request('POST', '/auth/registrations', 201, data={**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}})
+        current, jar = self.request('POST', '/auth/session', 200, data=account)
+        cookie = jar['portal_session'].value
+        spec = {'name': 'test', 'dose_text': 'test', 'local_times': ['09:00'], 'starts_on': '2026-01-01'}
+        self.request('POST', '/me/medications', 422, cookie=cookie, data=spec)
+        self.request('POST', '/me/medications', 401, data=spec, headers={'X-Portal-Session': current['session_id']})
+        stale = {'X-Portal-Session': old['session_id']}
+        self.request('GET', '/me/onboarding', 409, cookie=cookie, headers=stale)
+        error, _ = self.request('POST', '/me/medications', 409, cookie=cookie, data=spec, headers=stale)
+        self.assertEqual(error['code'], 'SESSION_CHANGED')
+        self.assertEqual(self.request('GET', '/me/medications', 200, cookie=cookie)[0]['total'], 0)
+        refreshed, rotated = self.request('POST', '/auth/session/refresh', 200, headers={'Cookie': 'portal_refresh=' + jar['portal_refresh'].value})
+        self.assertEqual(refreshed['session_id'], current['session_id'])
+        self.request('POST', '/me/medications', 202, cookie=rotated['portal_session'].value, data=spec, headers={'X-Portal-Session': current['session_id']})
 
     def test_patient_journey(self):
         account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
@@ -71,7 +88,7 @@ class BrowserIdentity(unittest.TestCase):
         session = jar['portal_session'].value
         self.request('PUT', '/admin/account-role', 403, cookie=session, data={'email': account['email'], 'role': 'admin'})
         profile = {'name': 'Тест', 'diagnosis': None, 'medications': [], 'reminders': {'timezone': 'UTC', 'enabled': False, 'channels': []}}
-        self.request('PUT', '/me/onboarding', 202, cookie=session, data=profile)
+        self.request('PUT', '/me/onboarding', 202, cookie=session, data=profile, headers={'X-Portal-Session': principal['session_id']})
         _, rotated = self.request('POST', '/auth/session/refresh', 200, headers={'Cookie': 'portal_refresh=' + jar['portal_refresh'].value})
         self.request('GET', '/me/onboarding', 401, cookie=session)
         current = rotated['portal_session'].value

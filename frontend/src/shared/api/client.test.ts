@@ -62,6 +62,35 @@ describe('BFF client', () => {
     expect(new Headers(posts[0][1]?.headers).get('X-Portal-Request')).toBe('1')
   })
 
+  it('keeps the form session on a medication write and its retry after refresh', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(Response.json({}))
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(status('succeeded'))
+    const api = createBffClient(fetcher)
+    await api.addMedication(
+      'original-session',
+      'medicine',
+      'dose',
+      '09:00',
+      '2026-01-01',
+    )(signal, pending)
+    for (const index of [0, 3, 4]) {
+      expect(
+        new Headers(fetcher.mock.calls[index][1]?.headers).get(
+          'X-Portal-Session',
+        ),
+      ).toBe('original-session')
+    }
+  })
+
   it('polls pending operations and retries polling without resending an accepted command', async () => {
     vi.useFakeTimers()
     const fetcher = vi
