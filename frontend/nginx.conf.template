@@ -26,8 +26,8 @@ server {
     try_files $uri =404;
   }
 
-  # Backend API with WebSocket support (e.g. streaming LLM output)
-  location /api/ {
+  # BFF API and Scalar documentation share the same upstream.
+  location ~ ^/(api|scalar)(/|$) {
     set $backend ${NGINX_BACKEND_URL};
     set $portal_origin "${NGINX_PUBLIC_ORIGIN}";
     if ($portal_origin = '') {
