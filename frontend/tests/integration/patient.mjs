@@ -82,6 +82,8 @@ try {
   await page.getByRole('link', { name: 'Результат 1, версия 1' }).click()
   await page.getByRole('heading', { name: 'Результат анкеты' }).waitFor()
   assert.match(page.url(), /\/results\/[^/]+\/versions\/1$/)
+  await page.getByRole('button', { name: 'Получить пояснение' }).click()
+  await page.getByText(/Демонстрационный уровень:/).waitFor()
   console.log(
     'PASS: guest screening → patient registration → refresh → cabinet → sign in → result',
   )

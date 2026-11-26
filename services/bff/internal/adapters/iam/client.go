@@ -192,7 +192,7 @@ func (c *Client) Check(ctx context.Context, l *application.Login, action string,
 		if d.GetReasonCode() == "ACCESS_REVOKED" {
 			return time.Time{}, domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
 		}
-		if r.Type == "cabinet" && d.GetReasonCode() == "ACCESS_DENIED" {
+		if (r.Type == "cabinet" || r.Type == "doctor_report" || r.Type == "cabinet_operation") && d.GetReasonCode() == "ACCESS_DENIED" {
 			if err := l.Actor.RequireRegistered(); err != nil {
 				return time.Time{}, err
 			}

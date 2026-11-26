@@ -33,10 +33,17 @@ func (s Reports) Create(a *domain.Actor, x domain.ReportRequest) ([]domain.Resou
 	s.Records.Put(OwnedID{a.ID, r.ID}, r)
 	return []domain.Resource{domain.Ref("report", r.ID)}, nil
 }
-func (s Reports) Get(a *domain.Actor, id string) (domain.Report, error) {
-	r, ok := s.Records.Get(OwnedID{a.ID, id})
+func (s Reports) Find(owner, id string) (domain.Report, error) {
+	r, ok := s.Records.Get(OwnedID{owner, id})
 	if !ok {
 		return r, domain.NotFound()
+	}
+	return r, nil
+}
+func (s Reports) Get(a *domain.Actor, id string) (domain.Report, error) {
+	r, err := s.Find(a.ID, id)
+	if err != nil {
+		return r, err
 	}
 	return r, r.Accessible(a)
 }

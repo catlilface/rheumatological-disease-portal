@@ -19,8 +19,9 @@ var mvpResources = map[string]string{
 	"getMedicalDataPolicy": "", "getSurvey": "", "listArticles": "", "getArticle": "", "getDoctorRoute": "",
 	"startScreening": "subject", "getScreening": "screening", "saveAnswer": "screening",
 	"continueAfterRedFlag": "screening", "completeScreening": "screening", "abandonScreening": "screening",
-	"getLatestResult": "screening", "getExactResult": "result", "requestPdf": "result",
-	"getReport": "report", "downloadOwnPdf": "report", "getOperation": "operation",
+	"getLatestResult": "screening", "getExactResult": "result", "getExplanation": "result", "requestExplanation": "result",
+	"requestPdf": "report-source",
+	"getReport":  "report", "downloadOwnPdf": "report", "getOperation": "operation",
 }
 
 // Resolve ownership in the BFF's synthetic stores. A URL or result reference
@@ -37,27 +38,42 @@ func (a *API) resolveResource(c *call, id string) (domain.Resource, error) {
 		key := c.owned("screening_id")
 		r = domain.Ref("screening", key.ID)
 		_, lookup = a.screenings.Get(key)
-	case "result":
-		ref := c.result()
-		if id == "requestPdf" {
-			var x domain.ReportRequest
-			if err := json.Unmarshal(c.body, &x); err != nil || x.Kind != "screening" || x.Result == nil {
-				return r, domain.NotFound()
-			}
-			ref = *x.Result
+	case "report-source":
+		var spec domain.ReportRequest
+		if err := json.Unmarshal(c.body, &spec); err != nil {
+			return r, invalid("body")
 		}
-		r = domain.Ref("result", ref.ID, ref.Version)
-		_, lookup = a.screenings.Exact(c.actor.ID, ref)
+		if spec.Kind == "doctor" {
+			return domain.Ref("cabinet", c.actor.ID), nil
+		}
+		if spec.Result == nil {
+			return r, invalid("body.result")
+		}
+		return a.resultResource(c.actor.ID, *spec.Result)
+	case "result":
+		return a.resultResource(c.actor.ID, c.result())
 	case "report":
 		r = domain.Ref("report", c.id("report_id"))
-		_, lookup = a.reports.Get(c.actor, r.ID)
+		var report domain.Report
+		report, lookup = a.reports.Find(c.actor.ID, r.ID)
+		if lookup == nil && report.Specification.Kind == "doctor" {
+			r.Type = "doctor_report"
+		}
 	case "operation":
 		r = domain.Ref("operation", c.id("operation_id"))
+		if c.id("owner") == "cabinet" {
+			r.Type = "cabinet_operation"
+		}
 		_, lookup = a.commands.Get(c.actor, c.id("owner"), r.ID)
 	default:
 		return r, domain.NotFound()
 	}
 	return r, lookup
+}
+
+func (a *API) resultResource(owner string, ref domain.ResultRef) (domain.Resource, error) {
+	_, err := a.screenings.Exact(owner, ref)
+	return domain.Ref("result", ref.ID, ref.Version), err
 }
 
 func (a *API) checkResource(c *call, id string) error {

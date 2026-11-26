@@ -22,14 +22,16 @@ CABINET_ACTIONS = {
     'getOnboarding', 'finishOnboarding', 'listMedications', 'addMedication', 'updateMedication',
     'stopMedication', 'listDoses', 'markIntake', 'getReminderSettings', 'updateReminderSettings',
     'listNotifications', 'readNotification', 'listDiaryEntries', 'getDiaryEntry', 'createDiaryEntry',
-    'replaceDiaryEntry', 'deleteDiaryEntry', 'listScreeningResults',
+    'replaceDiaryEntry', 'deleteDiaryEntry', 'listScreeningResults', 'requestPdf',
 }
+PATIENT_ACTIONS = {'cabinet': CABINET_ACTIONS, 'doctor_report': {'getReport', 'downloadOwnPdf'},
+                   'cabinet_operation': {'getOperation'}}
 ROLES = {'patient': api.USER_ROLE_PATIENT, 'admin': api.USER_ROLE_ADMIN, 'editor': api.USER_ROLE_EDITOR}
 # The BFF owns the synthetic resource partitions. No service-wide read permission.
 GUEST_ACTIONS = {
     'subject': {'startScreening'},
     'screening': {'getScreening', 'saveAnswer', 'continueAfterRedFlag', 'completeScreening', 'abandonScreening', 'getLatestResult'},
-    'result': {'getExactResult', 'requestPdf'},
+    'result': {'getExactResult', 'requestPdf', 'getExplanation', 'requestExplanation'},
     'report': {'getReport', 'downloadOwnPdf'},
     'operation': {'getOperation'},
 }
@@ -40,8 +42,8 @@ def can_access(principal, action, resource_type, target, owner):
     if owner != subject or (resource_type in ('subject', 'cabinet') and target != subject):
         return False
     patient = list(principal.roles) == [api.USER_ROLE_PATIENT]
-    if resource_type == 'cabinet':
-        return patient and principal.has_medical_consent and action in CABINET_ACTIONS
+    if resource_type in PATIENT_ACTIONS:
+        return patient and principal.has_medical_consent and action in PATIENT_ACTIONS[resource_type]
     return (principal.is_guest or patient) and action in GUEST_ACTIONS.get(resource_type, ())
 
 

@@ -26,6 +26,8 @@ class BrowserIdentity(unittest.TestCase):
             jar = SimpleCookie()
             for item in response.headers.get_all('Set-Cookie', []):
                 jar.load(item)
+            if response.headers.get_content_type() == 'application/pdf':
+                return raw, jar
             return json.loads(raw) if raw else None, jar
         finally:
             conn.close()
@@ -45,12 +47,20 @@ class BrowserIdentity(unittest.TestCase):
         _, first = self.request('POST', '/auth/registrations', 201, data={**account, 'medical_data_consent': {'version': 'demo-medical-v1', 'accepted': True}})
         _, second = self.request('POST', '/auth/session', 200, data=account)
         self.request('GET', '/me/onboarding', 200, cookie=second['portal_session'].value)
+        spec = {'kind': 'doctor', 'from_date': '2026-01-01', 'to_date': '2026-01-02', 'sections': ['diary']}
+        receipt, _ = self.request('POST', '/reports', 202, data=spec, cookie=second['portal_session'].value)
+        op, _ = self.request('GET', receipt['status_url'].removeprefix('/api/v1'), 200, cookie=second['portal_session'].value)
+        report = '/reports/' + op['resources'][0]['resource_id']
+        self.assertEqual(self.request('GET', report, 200, cookie=second['portal_session'].value)[0]['specification'], spec)
+        self.assertTrue(self.request('GET', report + '/pdf', 200, cookie=second['portal_session'].value)[0].startswith(b'%PDF-'))
         for _ in range(2):
             self.request('DELETE', '/me/medical-data-consent', 204, cookie=first['portal_session'].value)
         _, new_login = self.request('POST', '/auth/session', 200, data=account)
         for jar in (first, second, new_login):
             error, _ = self.request('GET', '/me/onboarding', 403, cookie=jar['portal_session'].value)
             self.assertEqual(error['code'], 'CONSENT_REQUIRED')
+            self.request('GET', report + '/pdf', 403, cookie=jar['portal_session'].value)
+            self.request('POST', '/reports', 403, data=spec, cookie=jar['portal_session'].value)
 
     def test_patient_journey(self):
         account = {'email': f'{uuid4()}@example.test', 'password': secrets.token_urlsafe(18)}
@@ -87,6 +97,11 @@ class BrowserIdentity(unittest.TestCase):
         self.assertEqual(self.request('GET', '/me/screening-results', 200, cookie=cookie)[0]['items'], [result])
         self.assertEqual(self.request('GET', exact, 200, cookie=cookie)[0], result)
         self.request('GET', exact, 404, cookie=stranger)
+        explanation = exact + '/explanation'
+        self.assertEqual(self.request('GET', explanation, 404, cookie=cookie)[0]['code'], 'EXPLANATION_NOT_READY')
+        self.request('POST', explanation, 202, cookie=cookie)
+        self.assertEqual(self.request('GET', explanation, 200, cookie=cookie)[0]['result']['result_id'], result['result_id'])
+        self.request('GET', explanation, 404, cookie=stranger)
         self.assertEqual(self.request('GET', '/me/screening-results', 200, cookie=stranger)[0]['items'], [])
         admin_email = f'{uuid4()}@example.test'
         staff_fixture(authority(), admin_email, account['password'], 'admin')
