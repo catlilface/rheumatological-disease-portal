@@ -1,0 +1,48 @@
+name: Publish release images
+
+on:
+  push:
+    tags: ['**']
+
+jobs:
+  publish:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release tag and resolve image names
+        run: |
+          if ! [[ "$TAG_NAME" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]]; then
+            echo 'Git tag is not a valid Docker image tag' >&2
+            exit 1
+          fi
+          cp .env.example .env
+          docker compose -f docker-compose.yaml --profile tools config --format json > "$RUNNER_TEMP/source.json"
+          docker compose -f deploy.yml --profile tools config --format json > "$RUNNER_TEMP/release.json"
+
+      - name: Build application images
+        run: docker compose -f docker-compose.yaml --profile tools build
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish every image required by deploy.yml
+        run: |
+          for service in $(jq -r '.services | keys[]' "$RUNNER_TEMP/release.json"); do
+            source=$(jq -er --arg s "$service" '.services[$s].image' "$RUNNER_TEMP/source.json")
+            target=$(jq -er --arg s "$service" '.services[$s].image' "$RUNNER_TEMP/release.json")
+            if ! jq -e --arg s "$service" '.services[$s].build' "$RUNNER_TEMP/source.json" > /dev/null; then
+              docker pull "$source"
+            fi
+            docker tag "$source" "$target"
+            docker push "$target"
+          done
