@@ -1,9 +1,9 @@
-export const themes = ['auto', 'light', 'dark'] as const
+export const themes = ['light', 'dark'] as const
 
 export type Theme = (typeof themes)[number]
 
 const storageKey = 'portal-theme'
-const defaultTheme = 'auto'
+const defaultTheme = 'light'
 
 function isTheme(value: string | null): value is Theme {
   return themes.some((theme) => theme === value)

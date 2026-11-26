@@ -1,19 +1,26 @@
 :root {
-  color-scheme: light dark;
-  --color-bg: light-dark(#f2f7fc, #111b26);
-  --color-surface: light-dark(#fff, #192838);
-  --color-text: light-dark(#142d49, #edf4fb);
-  --color-muted: light-dark(#465a70, #bdcedd);
-  --color-accent: light-dark(#155c9e, #91c8ff);
-  --color-accent-hover: light-dark(#0d467e, #c2e1ff);
-  --color-accent-soft: light-dark(#e5f1fd, #213a50);
-  --color-border: light-dark(#ccdeee, #43586d);
-  --color-highlight: light-dark(#fff, #102438);
-  --shadow: 0 10px 30px rgb(25 62 99 / 7%);
-}
-
-:root {
-  font-family: system-ui, 'Segoe UI', sans-serif;
+  color-scheme: light;
+  --color-bg: light-dark(#f5f9fb, #10202b);
+  --color-surface: light-dark(#fff, #172d3a);
+  --color-text: light-dark(#102e42, #eff7f9);
+  --color-muted: light-dark(#466171, #b5cbd4);
+  --color-accent: light-dark(#1b577a, #9bd4ee);
+  --color-accent-hover: light-dark(#123b54, #c5e8f8);
+  --color-accent-soft: light-dark(#e8f2f8, #214455);
+  --color-border: light-dark(#d4e4e9, #385563);
+  --color-highlight: light-dark(#fff, #102631);
+  --color-green: light-dark(#25635c, #a2ddd0);
+  --color-green-soft: light-dark(#e2f4ef, #1e4947);
+  --glass-edge: light-dark(#fff, #46616c);
+  --glass-fill: light-dark(rgb(255 255 255 / 72%), rgb(26 47 60 / 82%));
+  --glass-shadow:
+    inset 0 1px 0 var(--glass-edge), 0 16px 42px rgb(15 53 75 / 8%);
+  --page-glow: light-dark(#e5f5f0, #183c40);
+  --hero-background: light-dark(#f8fcff, #152c39);
+  --visual-background: light-dark(#e6f5fa, #1c3a4c);
+  --hero-image-tint: light-dark(transparent, rgb(8 29 43 / 44%));
+  --font-display: Georgia, 'Times New Roman', serif;
+  font-family: 'Segoe UI', system-ui, sans-serif;
   line-height: 1.6;
   color: var(--color-text);
   background: var(--color-bg);
@@ -41,8 +48,10 @@ h2 {
 }
 
 h1 {
-  font-size: clamp(1.9rem, 4vw, 3rem);
-  letter-spacing: -0.025em;
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 4.2vw, 3.35rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
 }
 
 h2 {
@@ -63,8 +72,10 @@ a,
 .portal-flow fieldset {
   min-width: 0;
   margin: 0;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: 1rem;
+  background: var(--glass-fill);
 }
 
 .portal-flow fieldset label {
@@ -74,11 +85,23 @@ a,
 }
 
 .portal-flow button {
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
-  background: var(--color-accent-soft);
-  color: var(--color-text);
+  min-height: 2.75rem;
+  padding: 0.6rem 1.125rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-weight: 650;
+}
+
+.portal-flow button,
+.primary-link {
+  color: var(--color-highlight);
+  background: var(--color-accent);
+}
+
+.portal-flow button:hover:not(:disabled),
+.primary-link:hover {
+  color: var(--color-highlight);
+  background: var(--color-accent-hover);
 }
 
 .portal-flow button:disabled {
@@ -88,6 +111,7 @@ a,
 
 .portal-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.25rem;
 }
 
@@ -97,6 +121,11 @@ a,
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.material-list li + li {
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
 }
 
 .material-text {
@@ -123,34 +152,32 @@ button {
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+  background: radial-gradient(
+    ellipse 45rem 31rem at 80% 0%,
+    var(--page-glow),
+    transparent
+  );
 }
 
 .container {
-  width: min(100% - 2rem, 68rem);
+  width: min(100% - clamp(1.25rem, 5vw, 4rem), 76rem);
   margin-inline: auto;
-}
-
-.header,
-.footer {
-  background: var(--color-surface);
 }
 
 .main {
   flex: 1;
-  padding-block: clamp(1.5rem, 5vw, 4rem);
+  padding-block: clamp(0.95rem, 2.75vw, 2.5rem) clamp(2.25rem, 5vw, 4.5rem);
 }
 
-.hero,
 .article {
-  padding: clamp(1.25rem, 5vw, 4rem);
+  width: min(100%, 62rem);
+  margin-inline: auto;
+  padding: clamp(1.25rem, 5vw, 3.5rem);
   overflow-wrap: anywhere;
-  border: 1px solid var(--color-border);
-  border-radius: 1.25rem;
-}
-
-.article {
-  background: var(--color-surface);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--glass-edge);
+  border-radius: clamp(1.25rem, 3vw, 2.25rem);
+  background: var(--glass-fill);
+  box-shadow: var(--glass-shadow);
 }
 
 .article__lead,
@@ -180,10 +207,6 @@ button {
   text-decoration: underline;
 }
 
-:root[data-theme='light'] {
-  color-scheme: light;
-}
-
 :root[data-theme='dark'] {
   color-scheme: dark;
 }
@@ -196,6 +219,7 @@ button {
   .hero,
   .cookie-notice,
   .cookie-notice button,
+  .portal-flow button,
   .primary-link,
   a,
   .text-button {

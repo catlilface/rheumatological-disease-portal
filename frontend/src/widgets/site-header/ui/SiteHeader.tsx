@@ -7,6 +7,7 @@ export default function SiteHeader() {
     <header className="header">
       <div className="container header__inner">
         <Link className="brand" to="/">
+          <img src="/favicon.svg" width={32} height={32} alt="" />
           {t('portal.title')}
         </Link>
         <nav className="header__nav" aria-label={t('nav.primary')}>

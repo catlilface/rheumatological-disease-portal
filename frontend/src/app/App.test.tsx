@@ -116,15 +116,16 @@ describe('Cookie consent', () => {
 })
 
 describe('Theme', () => {
-  const themeControl = () =>
-    screen.getByRole('combobox', { name: t('theme.label') })
+  const themeGroup = () => screen.getByRole('group', { name: t('theme.label') })
+  const themeOption = (option: 'light' | 'dark') =>
+    within(themeGroup()).getByRole('radio', { name: t(`theme.${option}`) })
 
-  it('switches among three themes and persists the selection with functional consent', () => {
+  it('switches between light and dark and persists the selection with functional consent', () => {
     const { unmount } = renderApp()
-    expect(themeControl()).toHaveValue('auto')
-    expect(document.documentElement.dataset.theme).toBe('auto')
+    expect(themeOption('light')).toBeChecked()
+    expect(document.documentElement.dataset.theme).toBe('light')
 
-    fireEvent.change(themeControl(), { target: { value: 'dark' } })
+    fireEvent.click(themeOption('dark'))
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(localStorage.getItem('portal-theme')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: t('cookies.accept') }))
@@ -132,17 +133,27 @@ describe('Theme', () => {
 
     unmount()
     renderApp()
-    expect(themeControl()).toHaveValue('dark')
-    fireEvent.change(themeControl(), { target: { value: 'light' } })
+    expect(themeOption('dark')).toBeChecked()
+    fireEvent.click(themeOption('light'))
     expect(localStorage.getItem('portal-theme')).toBe('light')
     expect(document.documentElement.dataset.theme).toBe('light')
-    fireEvent.change(themeControl(), { target: { value: 'auto' } })
-    expect(localStorage.getItem('portal-theme')).toBe('auto')
-    expect(document.documentElement.dataset.theme).toBe('auto')
 
     fireEvent.click(screen.getByRole('button', { name: t('cookies.settings') }))
     fireEvent.click(screen.getByRole('button', { name: t('cookies.reject') }))
     expect(localStorage.getItem('portal-theme')).toBeNull()
+  })
+
+  it('defaults to light for a saved legacy system theme', () => {
+    localStorage.setItem(
+      'cookie-consent',
+      JSON.stringify({ functional: true, analytics: false }),
+    )
+    localStorage.setItem('portal-theme', 'auto')
+    renderApp()
+
+    expect(within(themeGroup()).getAllByRole('radio')).toHaveLength(2)
+    expect(themeOption('light')).toBeChecked()
+    expect(document.documentElement.dataset.theme).toBe('light')
   })
 
   it('disables the theme selector if storage cannot be read', () => {
@@ -154,9 +165,9 @@ describe('Theme', () => {
     renderApp()
 
     expect(warn).toHaveBeenCalled()
-    expect(themeControl()).toBeDisabled()
-    expect(themeControl()).toHaveAccessibleDescription(t('theme.unavailable'))
-    expect(document.documentElement.dataset.theme).toBe('auto')
+    expect(themeOption('dark')).toBeDisabled()
+    expect(themeGroup()).toHaveAccessibleDescription(t('theme.unavailable'))
+    expect(document.documentElement.dataset.theme).toBe('light')
   })
 
   it('preserves the previously applied theme if writing the new choice fails', () => {
@@ -173,11 +184,11 @@ describe('Theme', () => {
       .mockImplementation(() => {
         throw new Error('Storage unavailable')
       })
-    fireEvent.change(themeControl(), { target: { value: 'dark' } })
+    fireEvent.click(themeOption('dark'))
 
     expect(warn).toHaveBeenCalled()
-    expect(themeControl()).toBeDisabled()
-    expect(themeControl()).toHaveValue('light')
+    expect(themeOption('dark')).toBeDisabled()
+    expect(themeOption('light')).toBeChecked()
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(localStorage.getItem('portal-theme')).toBe('light')
 
@@ -185,6 +196,6 @@ describe('Theme', () => {
     fireEvent.click(screen.getByRole('button', { name: t('cookies.settings') }))
     fireEvent.click(screen.getByRole('button', { name: t('cookies.reject') }))
     expect(localStorage.getItem('portal-theme')).toBeNull()
-    expect(themeControl()).toBeDisabled()
+    expect(themeOption('dark')).toBeDisabled()
   })
 })
