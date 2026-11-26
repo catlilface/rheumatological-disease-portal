@@ -10,7 +10,7 @@ cleanup() { docker compose down -v && rm -rf "$MIS_SECRET_DIR"; }
 trap cleanup EXIT
 owners=(iam screening content reporting files ai)
 tables=(
-  'principals auth_sessions session_refresh_tokens roles principal_roles role_permissions resource_grants access_audit'
+  'principals auth_sessions session_refresh_tokens roles principal_roles role_permissions resource_grants access_audit admin_bootstrap'
   'questionnaire_versions screening_sessions screening_answers screening_results'
   'materials material_versions material_sources' 'report_jobs report_snapshots'
   'stored_files download_grants'

@@ -63,15 +63,16 @@ services:
       - ${MIS_SECRET_DIR:-./.secrets}/portal-tls-v2/bff:/run/iam-tls:ro
       - patient_archive:/var/lib/portal
     environment:
-      APP_NAME: ${APP_NAME}
-      DEBUG: ${DEBUG}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
-      CORS__ALLOW_ORIGINS: ${CORS__ALLOW_ORIGINS}
-      CORS__ALLOW_METHODS: ${CORS__ALLOW_METHODS}
-      CORS__ALLOW_HEADERS: ${CORS__ALLOW_HEADERS}
-      CORS__ALLOW_CREDENTIALS: ${CORS__ALLOW_CREDENTIALS}
-      CORS__EXPOSE_HEADERS: ${CORS__EXPOSE_HEADERS}
-      CORS__MAX_AGE: ${CORS__MAX_AGE}
+      - APP_NAME
+      - DEBUG
+      - ALLOWED_HOSTS
+      - CORS
+      - CORS__ALLOW_ORIGINS
+      - CORS__ALLOW_METHODS
+      - CORS__ALLOW_HEADERS
+      - CORS__ALLOW_CREDENTIALS
+      - CORS__EXPOSE_HEADERS
+      - CORS__MAX_AGE
     healthcheck:
       <<: *health
       test: [CMD, wget, -q, -T, "4", -O, /dev/null, http://127.0.0.1:8000/health]
