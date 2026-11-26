@@ -43,7 +43,7 @@ func (d demoAuth) Register(_ context.Context, key, _, email, password string, co
 	return d.s.Register(key, email, password, consent)
 }
 func (d demoAuth) SetRole(context.Context, string, string, string) error { return domain.NotFound() }
-func (d demoAuth) Check(context.Context, *app.Login, string, domain.Resource, string) error {
+func (d demoAuth) Check(context.Context, *app.Login, string, domain.Resource, string) (time.Time, error) {
 	panic("not an IAM client")
 }
 func demo(cfg config.Settings) (httpapi.Identity, httpapi.DemoRegistration, error) {

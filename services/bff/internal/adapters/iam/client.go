@@ -162,7 +162,7 @@ func (c *Client) Revoke(ctx context.Context, token string) error {
 	}
 	return nil
 }
-func (c *Client) Check(ctx context.Context, l *application.Login, action string, r domain.Resource, owner string) error {
+func (c *Client) Check(ctx context.Context, l *application.Login, action string, r domain.Resource, owner string) (time.Time, error) {
 	resource := &common.ResourceReference{ResourceType: r.Type, ResourceId: r.ID}
 	if r.Version > 0 {
 		version := uint64(r.Version)
@@ -173,28 +173,28 @@ func (c *Client) Check(ctx context.Context, l *application.Login, action string,
 		AccessToken: l.Access, Action: action, Resource: resource, ResourceOwnerSubjectId: owner,
 	})
 	if status.Code(e) == codes.InvalidArgument {
-		return domain.NotFound()
+		return time.Time{}, domain.NotFound()
 	}
 	if e != nil {
-		return failure(e, "SESSION_REQUIRED")
+		return time.Time{}, failure(e, "SESSION_REQUIRED")
 	}
 	if !d.GetAllowed() {
 		if d.GetReasonCode() == "ACCESS_REVOKED" {
-			return domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
+			return time.Time{}, domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
 		}
 		if r.Type == "cabinet" && d.GetReasonCode() == "ACCESS_DENIED" {
 			if err := l.Actor.RequireRegistered(); err != nil {
-				return err
+				return time.Time{}, err
 			}
 			if err := l.Actor.RequirePatient(); err != nil {
-				return err
+				return time.Time{}, err
 			}
 		}
-		return domain.NotFound()
+		return time.Time{}, domain.NotFound()
 	}
 	if d.GetEvaluatedAt().CheckValid() != nil || d.GetExpiresAt().CheckValid() != nil ||
 		d.ExpiresAt.AsTime().After(d.EvaluatedAt.AsTime().Add(5*time.Second)) || !time.Now().Before(d.ExpiresAt.AsTime()) {
-		return unavailable()
+		return time.Time{}, unavailable()
 	}
-	return nil
+	return d.ExpiresAt.AsTime(), nil
 }

@@ -2,6 +2,8 @@ package httpapi
 
 import (
 	"context"
+	"time"
+
 	"portal/bff/internal/application"
 	"portal/bff/internal/domain"
 )
@@ -16,7 +18,7 @@ type Identity interface {
 	SignIn(ctx context.Context, email, password string) (*application.Login, error)
 	Rotate(ctx context.Context, refresh, key string) (*application.Login, error)
 	Revoke(ctx context.Context, access string) error
-	Check(ctx context.Context, login *application.Login, action string, resource domain.Resource, owner string) error
+	Check(ctx context.Context, login *application.Login, action string, resource domain.Resource, owner string) (time.Time, error)
 }
 type Operations interface {
 	Run(actor, owner, key string, fingerprint [32]byte, apply func() ([]domain.Resource, error)) (application.OperationKey, error)

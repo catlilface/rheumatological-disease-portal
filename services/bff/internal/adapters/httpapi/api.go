@@ -67,6 +67,7 @@ const (
 
 type call struct {
 	ctx                         context.Context
+	validUntil                  time.Time
 	login                       *application.Login
 	actor                       *domain.Actor
 	values                      map[string]string
@@ -273,12 +274,7 @@ func (a *API) on(id string, level access, h handler) {
 		defer cancel()
 		var data []byte
 		var contentType string
-		// Only mutable fixture stores require the process-local transaction. A slow
-		// IAM call on login must not serialize other logins or public content.
 		dispatch := func() {
-			if err = a.authorize(c, id, level); err != nil {
-				return
-			}
 			var out any
 			out, err = h(c)
 			if err != nil {
@@ -295,10 +291,26 @@ func (a *API) on(id string, level access, h handler) {
 				data, err = json.Marshal(v)
 			}
 		}
-		if resource == "" && a.demoRegister == nil {
-			dispatch()
-		} else {
-			a.tx.Within(dispatch)
+		if a.demoRegister != nil {
+			// The demo identity and fixture stores share mutable in-process state.
+			a.tx.Within(func() {
+				if err = a.authorize(c, id, level); err == nil {
+					dispatch()
+				}
+			})
+		} else if err = a.authorize(c, id, level); err == nil {
+			if resource == "" {
+				dispatch()
+			} else {
+				a.tx.Within(func() {
+					// Ownership is immutable; handlers re-read the same owner-scoped key.
+					if c.ctx.Err() != nil || !time.Now().Before(c.validUntil) {
+						err = domain.Fail(domain.Unavailable, "AUTHORIZATION_UNAVAILABLE")
+						return
+					}
+					dispatch()
+				})
+			}
 		}
 		if err != nil {
 			problem(w, err)

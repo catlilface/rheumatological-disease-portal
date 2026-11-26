@@ -25,7 +25,7 @@ var mvpResources = map[string]string{
 
 // Resolve ownership in the BFF's synthetic stores. A URL or result reference
 // selects a target, never its owner. A miss still gets an audited IAM denial.
-func (a *API) checkResource(c *call, id string) error {
+func (a *API) resolveResource(c *call, id string) (domain.Resource, error) {
 	var r domain.Resource
 	var lookup error
 	switch mvpResources[id] {
@@ -42,7 +42,7 @@ func (a *API) checkResource(c *call, id string) error {
 		if id == "requestPdf" {
 			var x domain.ReportRequest
 			if err := json.Unmarshal(c.body, &x); err != nil || x.Kind != "screening" || x.Result == nil {
-				return domain.NotFound()
+				return r, domain.NotFound()
 			}
 			ref = *x.Result
 		}
@@ -55,13 +55,25 @@ func (a *API) checkResource(c *call, id string) error {
 		r = domain.Ref("operation", c.id("operation_id"))
 		_, lookup = a.commands.Get(c.actor, c.id("owner"), r.ID)
 	default:
-		return domain.NotFound()
+		return r, domain.NotFound()
+	}
+	return r, lookup
+}
+
+func (a *API) checkResource(c *call, id string) error {
+	var r domain.Resource
+	var lookup error
+	a.tx.Within(func() { r, lookup = a.resolveResource(c, id) })
+	if r.ID == "" {
+		return lookup
 	}
 	owner := ""
 	if lookup == nil {
 		owner = c.actor.ID
 	}
-	if err := a.auth.Check(c.ctx, c.login, id, r, owner); err != nil {
+	var err error
+	c.validUntil, err = a.auth.Check(c.ctx, c.login, id, r, owner)
+	if err != nil {
 		return err
 	}
 	return lookup
