@@ -9,6 +9,7 @@ on:
       - "contracts/**"
       - "infra/db/**"
       - "infra/check-transport.sh"
+      - "infra/k8s/check-http.py"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
       - "compose.yaml"
@@ -43,6 +44,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make up
+      - name: Verify IAM sessions against PostgreSQL and through the BFF
+        run: |
+          docker compose exec -T iam python -m unittest -v service.tests.test_sessions service.tests.test_bff
+          python3 infra/k8s/check-http.py http://127.0.0.1:8000
       - name: Check gRPC contracts, Kafka commands and BFF isolation
         run: bash infra/check-transport.sh compose
       - name: Check persistence after storage restart
@@ -84,7 +89,7 @@ jobs:
         if: matrix.service == 'bff'
         run: docker build -f services/bff/Dockerfile -t "rheumatology-portal-$SERVICE:ci" .
 
-      # TODO: Добавить модульные тесты для ai, content, files, iam, reporting и screening
+      # TODO: Подключить проверки остальных доменных сервисов
       # по мере реализации. Пока собираем их образы на общем runtime, как в Compose.
       - name: Build service image
         if: matrix.service != 'bff'

@@ -21,21 +21,22 @@ func TestRefreshRetriesCannotResurrectSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rotated, err := s.Rotate(guest.Refresh, "r")
+	prior := *guest
+	rotated, err := s.Rotate(prior.Refresh, "r")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Session(guest.Access); err == nil {
+	if _, err := s.Session(prior.Access); err == nil {
 		t.Fatal("old access token accepted")
 	}
-	if _, err := s.Rotate(guest.Refresh, "another-key"); err == nil {
-		t.Fatal("old refresh token accepted with new key")
+	if _, err := s.Rotate(prior.Refresh, "r"); err == nil {
+		t.Fatal("old refresh token accepted with original key")
 	}
-	if retry, err := s.Rotate(guest.Refresh, "r"); err != nil || retry != rotated {
-		t.Fatal("retry did not return same login")
+	if _, err := s.Session(rotated.Access); err == nil {
+		t.Fatal("refresh replay did not revoke the family")
 	}
 	now = rotated.Expires
-	if _, err := s.Rotate(guest.Refresh, "r"); err == nil {
+	if _, err := s.Rotate(rotated.Refresh, "r"); err == nil {
 		t.Fatal("expired replay succeeded")
 	}
 }

@@ -17,9 +17,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"portal/bff/internal/adapters/credentials"
 	"portal/bff/internal/adapters/fixtures"
 	"portal/bff/internal/adapters/httpapi"
+	"portal/bff/internal/adapters/iam"
 	"portal/bff/internal/adapters/memory"
 	app "portal/bff/internal/application"
 	"portal/bff/internal/config"
@@ -27,7 +27,7 @@ import (
 )
 
 // Composition root: no service locators, global settings or adapter imports in the core.
-func build(root string, cfg config.Settings) (http.Handler, error) {
+func build(root string, cfg config.Settings, identity httpapi.Identity, demo httpapi.DemoRegistration) (http.Handler, error) {
 	catalog, err := fixtures.Load()
 	if err != nil {
 		return nil, err
@@ -37,15 +37,10 @@ func build(root string, cfg config.Settings) (http.Handler, error) {
 		ID:    func() string { return uuid.Must(uuid.NewV7()).String() },
 		Token: func() string { var b [32]byte; rand.Read(b[:]); return base64.RawURLEncoding.EncodeToString(b[:]) },
 	}
-	identity := app.Identity{
-		Runtime: rt, Access: memory.New[string, *app.Login](), Refreshes: memory.New[string, *app.Login](),
-		Accounts: memory.New[string, app.Account](), Retries: memory.New[app.ReplayKey, *app.Login](),
-		Passwords: credentials.Scrypt{}, ModeratorPassword: cfg.ModeratorPassword,
-	}
 	commands := app.Commands{Runtime: rt,
 		Operations: memory.New[app.OperationKey, domain.Operation](), Receipts: memory.New[app.IntentKey, app.Receipt](),
 	}
-	api, err := httpapi.New(cfg, os.DirFS(filepath.Join(root, "contracts/http")), &memory.Transactions{}, identity, commands)
+	api, err := httpapi.New(cfg, os.DirFS(filepath.Join(root, "contracts/http")), &memory.Transactions{}, identity, commands, demo)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +64,10 @@ func build(root string, cfg config.Settings) (http.Handler, error) {
 	}, catalog.PDF)
 	return api, api.Ready()
 }
-func run() error {
+
+type identityFactory func(config.Settings) (httpapi.Identity, httpapi.DemoRegistration, error)
+
+func run(factory identityFactory) error {
 	addr := flag.String("addr", ":8000", "listen address")
 	cert := flag.String("tls-cert", "", "PEM certificate for direct HTTPS (otherwise terminate TLS at ingress)")
 	key := flag.String("tls-key", "", "PEM private key for direct HTTPS")
@@ -85,7 +83,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	handler, err := build(root, cfg)
+	identity, demo, err := factory(cfg)
+	if err != nil {
+		return err
+	}
+	handler, err := build(root, cfg, identity, demo)
 	if err != nil {
 		return err
 	}
@@ -115,7 +117,10 @@ func run() error {
 	}
 }
 func main() {
-	if err := run(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := run(func(config.Settings) (httpapi.Identity, httpapi.DemoRegistration, error) {
+		client, err := iam.Dial("iam:50051", "/run/iam-tls")
+		return client, nil, err
+	}); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("BFF failed", "error", err)
 		os.Exit(1)
 	}

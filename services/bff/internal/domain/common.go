@@ -15,6 +15,7 @@ const (
 	Missing
 	Conflict
 	Gone
+	Unavailable
 )
 
 type Problem struct {

@@ -315,7 +315,9 @@ async def test_sessions_and_guards(api):
     rotated = api.cookies['portal_refresh']
     assert rotated != old_refresh
     replay = await api.post(BASE + '/auth/session/refresh', headers={**key, 'Cookie': 'portal_refresh=' + old_refresh})
-    assert replay.status_code == 200 and api.cookies['portal_refresh'] == rotated
+    assert replay.status_code == 401
+    assert (await api.get(BASE + '/auth/session')).status_code == 401
+    assert (await api.post(BASE + '/auth/guest-sessions')).status_code == 201
     assert (await api.get(BASE + '/auth/session')).json()['kind'] == 'guest'
     assert (await api.get(BASE + '/me/onboarding')).status_code == 403
     assert (await api.delete(BASE + '/auth/session')).status_code == 204

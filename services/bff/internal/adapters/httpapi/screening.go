@@ -12,6 +12,7 @@ func (c *call) result() domain.ResultRef {
 	return domain.ResultRef{ID: c.id("result_id"), Version: c.version()}
 }
 func (a *API) Screening(s Screenings) {
+	a.screenings = s
 	a.on("getSurvey", public, func(c *call) (any, error) { return s.Survey(c.id("survey_id"), c.optional("weights_version")) })
 	command(a, "startScreening", current, "screening", func(c *call, x application.Start) ([]domain.Resource, error) { return s.Start(c.actor.ID, x) })
 	a.on("getScreening", current, func(c *call) (any, error) { return s.Get(c.owned("screening_id")) })

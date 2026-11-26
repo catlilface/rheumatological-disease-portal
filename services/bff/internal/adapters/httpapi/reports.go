@@ -6,6 +6,7 @@ import (
 )
 
 func (a *API) Reports(s application.Reports, document []byte) {
+	a.reports = s
 	a.on("requestPdf", current, bind(func(c *call, x domain.ReportRequest) (any, error) {
 		if x.Kind == "doctor" {
 			if err := c.actor.RequirePatient(); err != nil {

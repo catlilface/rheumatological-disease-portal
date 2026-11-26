@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"portal/bff/internal/application"
 	"portal/bff/internal/domain"
 )
@@ -8,12 +9,12 @@ import (
 // Inbound ports are defined by the adapter that consumes them. In particular,
 // an HTTP handler gets session and command use cases, not their repositories.
 type Identity interface {
-	Session(cookie string) (*application.Login, error)
-	Guest(key, cookie string) (*application.Login, error)
-	Register(key, email, password string, consent application.MedicalConsent) (*application.Login, error)
-	SignIn(email, password string) (*application.Login, error)
-	Rotate(refresh, key string) (*application.Login, error)
-	Revoke(*application.Login)
+	Session(context.Context, string) (*application.Login, error)
+	Guest(ctx context.Context, key, cookie string) (*application.Login, error)
+	SignIn(ctx context.Context, email, password string) (*application.Login, error)
+	Rotate(ctx context.Context, refresh, key string) (*application.Login, error)
+	Revoke(ctx context.Context, access string) error
+	Check(ctx context.Context, login *application.Login, action string, resource domain.Resource, owner string) error
 }
 type Operations interface {
 	Run(actor, owner, key string, fingerprint [32]byte, apply func() ([]domain.Resource, error)) (application.OperationKey, error)

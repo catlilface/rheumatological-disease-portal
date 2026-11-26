@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -21,20 +23,26 @@ import (
 )
 
 type API struct {
-	cfg      config.Settings
-	mux      *http.ServeMux
-	pending  contract
-	tx       application.UnitOfWork
-	auth     Identity
-	commands Operations
+	cfg          config.Settings
+	mux          *http.ServeMux
+	pending      contract
+	tx           application.UnitOfWork
+	auth         Identity
+	commands     Operations
+	screenings   Screenings
+	reports      application.Reports
+	demoRegister DemoRegistration
 }
 
-func New(cfg config.Settings, files fs.FS, tx application.UnitOfWork, auth Identity, commands Operations) (*API, error) {
+// Only the test executable supplies the legacy patient-registration fixture.
+type DemoRegistration func(string, string, string, application.MedicalConsent) (*application.Login, error)
+
+func New(cfg config.Settings, files fs.FS, tx application.UnitOfWork, auth Identity, commands Operations, demo DemoRegistration) (*API, error) {
 	spec, err := loadContract(files)
 	if err != nil {
 		return nil, err
 	}
-	a := &API{cfg, http.NewServeMux(), spec, tx, auth, commands}
+	a := &API{cfg: cfg, mux: http.NewServeMux(), pending: spec, tx: tx, auth: auth, commands: commands, demoRegister: demo}
 	a.mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	a.reference(files)
 	a.identity()
@@ -58,6 +66,7 @@ const (
 )
 
 type call struct {
+	ctx                         context.Context
 	login                       *application.Login
 	actor                       *domain.Actor
 	values                      map[string]string
@@ -95,7 +104,7 @@ func problem(w http.ResponseWriter, err error) {
 		status, code, msg = 422, "VALIDATION_ERROR", "Некорректный запрос."
 		v["fields"] = []map[string]string{{"field": field.field, "code": "invalid"}}
 	case errors.As(err, &p):
-		status = map[domain.Kind]int{domain.Invalid: 422, domain.Missing: 404, domain.Conflict: 409, domain.Unauthenticated: 401, domain.Forbidden: 403, domain.Gone: 410}[p.Kind]
+		status = map[domain.Kind]int{domain.Invalid: 422, domain.Missing: 404, domain.Conflict: 409, domain.Unauthenticated: 401, domain.Forbidden: 403, domain.Gone: 410, domain.Unavailable: 503}[p.Kind]
 		code, msg = p.Code, p.Message
 	}
 	v["code"], v["message"] = code, msg
@@ -218,15 +227,18 @@ func (a *API) prepare(w http.ResponseWriter, r *http.Request, e endpoint) (*call
 	}
 	return c, nil
 }
-func (a *API) authorize(c *call, level access) error {
+func (a *API) authorize(c *call, id string, level access) error {
 	if level == public {
 		return nil
 	}
-	l, err := a.auth.Session(c.accessCookie)
+	l, err := a.auth.Session(c.ctx, c.accessCookie)
 	if err != nil {
 		return err
 	}
 	c.login, c.actor = l, l.Actor
+	if a.demoRegister == nil && mvpResources[id] != "" {
+		return a.checkResource(c, id)
+	}
 	if level >= registered {
 		if err := c.actor.RequireRegistered(); err != nil {
 			return err
@@ -246,17 +258,25 @@ func (a *API) on(id string, level access, h handler) {
 		panic("unknown or duplicate handler: " + id)
 	}
 	delete(a.pending, id)
+	resource, mounted := mvpResources[id]
+	if a.demoRegister == nil && !mounted {
+		return
+	}
 	a.mux.HandleFunc(e.pattern, func(w http.ResponseWriter, r *http.Request) {
 		c, err := a.prepare(w, r, e)
 		if err != nil {
 			problem(w, err)
 			return
 		}
+		var cancel context.CancelFunc
+		c.ctx, cancel = context.WithTimeout(r.Context(), 4*time.Second)
+		defer cancel()
 		var data []byte
 		var contentType string
-		// Copy the response snapshot before releasing the transaction; never hold it during socket I/O.
-		a.tx.Within(func() {
-			if err = a.authorize(c, level); err != nil {
+		// Only mutable fixture stores require the process-local transaction. A slow
+		// IAM call on login must not serialize other logins or public content.
+		dispatch := func() {
+			if err = a.authorize(c, id, level); err != nil {
 				return
 			}
 			var out any
@@ -274,7 +294,12 @@ func (a *API) on(id string, level access, h handler) {
 				contentType = "application/json"
 				data, err = json.Marshal(v)
 			}
-		})
+		}
+		if resource == "" && a.demoRegister == nil {
+			dispatch()
+		} else {
+			a.tx.Within(dispatch)
+		}
 		if err != nil {
 			problem(w, err)
 			return

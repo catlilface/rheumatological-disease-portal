@@ -29,6 +29,8 @@ spec:
         image: rdp-bff:mvp
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - {name: tls, mountPath: /run/iam-tls, readOnly: true}
         readinessProbe:
           httpGet:
             port: 8000
@@ -38,6 +40,9 @@ spec:
               value: localhost
           periodSeconds: 10
           timeoutSeconds: 8
+      volumes:
+      - name: tls
+        secret: {secretName: iam-tls-bff}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

@@ -54,7 +54,7 @@ $defs:
   Principal:
     type: object
     required: [kind, roles, session_expires_at]
-    properties: {kind: {enum: [guest, member, staff]}, roles: {type: array, items: {enum: [patient, admin, medical_reviewer, moderator]}}, session_expires_at: *instant}
+    properties: {kind: {enum: [guest, member, staff]}, roles: {type: array, maxItems: 1, items: {enum: [patient, editor, admin]}}, session_expires_at: *instant}
   # Скрининг: порядок блоков/вопросов принадлежит данной редакции анкеты.
   DisclaimerFields:
     type: object

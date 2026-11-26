@@ -12,9 +12,11 @@ const PolicyVersion = "demo-medical-v1"
 const moderatorEmail = "moderator@example.test"
 
 type Login struct {
-	Actor           *domain.Actor
-	Access, Refresh string
-	Expires         time.Time
+	Actor                  *domain.Actor
+	Access, Refresh        string
+	Expires, AccessExpires time.Time
+	SessionID              string
+	Roles                  []string
 }
 type Account struct {
 	Actor *domain.Actor
@@ -25,6 +27,9 @@ type Passwords interface {
 	Matches([]byte, string) bool
 }
 type ReplayKey struct{ Scope, Key, Credential string }
+
+// Identity is the in-memory fixture for the legacy browser contract tests.
+// The BFF executable uses the gRPC IAM client instead.
 type Identity struct {
 	Runtime
 	Access, Refreshes Store[string, *Login]
@@ -35,14 +40,16 @@ type Identity struct {
 }
 
 func (s Identity) issue(a *domain.Actor) *Login {
-	l := &Login{a, s.Token(), s.Token(), s.Now().Add(24 * time.Hour)}
+	now := s.Now()
+	roles := map[string][]string{"guest": {}, "member": {"patient"}, "staff": {"admin"}}
+	l := &Login{Actor: a, Access: s.Token(), Refresh: s.Token(), Expires: now.Add(30 * 24 * time.Hour), AccessExpires: now.Add(168 * time.Hour), Roles: roles[a.Kind]}
 	s.Access.Put(l.Access, l)
 	s.Refreshes.Put(l.Refresh, l)
 	return l
 }
 func (s Identity) Session(cookie string) (*Login, error) {
 	l, ok := s.Access.Get(cookie)
-	if !ok || !s.Now().Before(l.Expires) {
+	if !ok || !s.Now().Before(l.AccessExpires) {
 		return nil, domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
 	}
 	return l, nil
@@ -111,18 +118,22 @@ func (s Identity) SignIn(email, password string) (*Login, error) {
 	return s.issue(a.Actor), nil
 }
 func (s Identity) Revoke(l *Login) { s.Access.Delete(l.Access); s.Refreshes.Delete(l.Refresh) }
-func (s Identity) Rotate(cookie, key string) (*Login, error) {
-	k := ReplayKey{"refresh", key, cookie}
-	if l, ok := s.Retries.Get(k); ok {
-		return s.Session(l.Access)
-	}
-	old, ok := s.Refreshes.Get(cookie)
-	if !ok || !s.Now().Before(old.Expires) {
+func (s Identity) Rotate(cookie, _ string) (*Login, error) {
+	l, ok := s.Refreshes.Get(cookie)
+	if !ok || !s.Now().Before(l.Expires) {
 		return nil, domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
 	}
-	s.Revoke(old)
-	l := s.issue(old.Actor)
-	s.Retries.Put(k, l)
-	s.Retries.Put(ReplayKey{"refresh", key, l.Refresh}, l)
+	if cookie != l.Refresh {
+		s.Revoke(l)
+		return nil, domain.Fail(domain.Unauthenticated, "SESSION_REQUIRED")
+	}
+	s.Access.Delete(l.Access)
+	l.Access, l.Refresh = s.Token(), s.Token()
+	l.AccessExpires = s.Now().Add(168 * time.Hour)
+	if l.Expires.Before(l.AccessExpires) {
+		l.AccessExpires = l.Expires
+	}
+	s.Access.Put(l.Access, l)
+	s.Refreshes.Put(l.Refresh, l)
 	return l, nil
 }

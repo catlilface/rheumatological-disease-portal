@@ -18,7 +18,7 @@ func TestConcurrentIntentAppliesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api, err := build(root, config.Settings{Hosts: []string{"localhost"}})
+	api, err := buildDemo(root, config.Settings{Hosts: []string{"localhost"}})
 	if err != nil {
 		t.Fatal(err)
 	}

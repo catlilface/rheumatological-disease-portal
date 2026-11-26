@@ -59,6 +59,7 @@ services:
       edge:
         aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
       rpc:
+    volumes: ["${MIS_SECRET_DIR:-./.secrets}/iam-tls/bff:/run/iam-tls:ro"]
     env_file:
       - .env
     healthcheck:
@@ -69,7 +70,13 @@ services:
     <<: *grpc
     image: rdp-iam:mvp
     build: {<<: *build, args: {SERVICE: iam}}
-    volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro"]
+    volumes:
+      - ${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/iam-key:/run/secrets/iam-key:ro
+      - ${MIS_SECRET_DIR:-./.secrets}/iam-tls/iam:/run/iam-tls:ro
+    healthcheck:
+      <<: *health
+      test: [CMD, python, -c, "import socket; socket.create_connection(('localhost',50051),3).close()"]
 
   files:
     <<: *grpc

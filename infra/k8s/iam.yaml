@@ -33,16 +33,20 @@ spec:
         - {name: PGHOST, value: postgres}
         volumeMounts:
         - {name: database, mountPath: /run/secrets, readOnly: true}
+        - {name: tls, mountPath: /run/iam-tls, readOnly: true}
         readinessProbe:
-          grpc:
+          tcpSocket:
             port: 50051
           periodSeconds: 10
           timeoutSeconds: 8
       volumes:
       - name: database
-        secret:
-          secretName: db-app-iam
-          items: [{key: password, path: db-password}]
+        projected:
+          sources:
+          - secret: {name: db-app-iam, items: [{key: password, path: db-password}]}
+          - secret: {name: iam-key}
+      - name: tls
+        secret: {secretName: iam-tls-iam}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -57,16 +61,7 @@ spec:
   ingress:
   - from:
     - podSelector:
-        matchExpressions:
-        - key: app
-          operator: In
-          values:
-          - bff
-          - files
-          - screening
-          - reporting
-          - content
-          - ai
+        matchLabels: {app: bff}
     ports:
     - protocol: TCP
       port: 50051

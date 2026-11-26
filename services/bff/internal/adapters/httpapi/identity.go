@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"portal/bff/internal/application"
+	"portal/bff/internal/domain"
 )
 
 type credentials struct {
@@ -22,8 +23,7 @@ func (x credentials) Validate() error {
 	return nil
 }
 func principal(l *application.Login) any {
-	roles := map[string][]string{"guest": {}, "staff": {"moderator"}, "member": {"patient"}}
-	return map[string]any{"kind": l.Actor.Kind, "roles": roles[l.Actor.Kind], "session_expires_at": l.Expires}
+	return map[string]any{"kind": l.Actor.Kind, "roles": l.Roles, "session_expires_at": l.Expires}
 }
 func sessionCookies(c *call, l *application.Login) {
 	for _, refresh := range []bool{false, true} {
@@ -34,9 +34,10 @@ func sessionCookies(c *call, l *application.Login) {
 			cookie.SameSite = http.SameSiteStrictMode
 		}
 		if l != nil {
-			cookie.Expires = l.Expires
+			cookie.Expires = l.AccessExpires
 			cookie.Value = l.Access
 			if refresh {
+				cookie.Expires = l.Expires
 				cookie.Value = l.Refresh
 			}
 		} else {
@@ -59,24 +60,29 @@ func (a *API) identity() {
 		return map[string]string{"version": application.PolicyVersion, "text": "Демонстрационное согласие. Используйте только вымышленные данные.", "document_url": "/policy/personal-info-agreement.pdf"}, nil
 	})
 	a.on("createGuestSession", public, func(c *call) (any, error) {
-		l, e := a.auth.Guest(c.id("Idempotency-Key"), c.accessCookie)
+		l, e := a.auth.Guest(c.ctx, c.id("Idempotency-Key"), c.accessCookie)
 		return c.issue(201, l, e)
 	})
 	a.on("registerPatient", public, bind(func(c *call, x credentials) (any, error) {
-		l, e := a.auth.Register(c.id("Idempotency-Key"), x.Email, x.Password, x.Consent)
+		if a.demoRegister == nil {
+			return nil, domain.NotFound()
+		}
+		l, e := a.demoRegister(c.id("Idempotency-Key"), x.Email, x.Password, x.Consent)
 		return c.issue(201, l, e)
 	}))
 	a.on("signIn", public, bind(func(c *call, x credentials) (any, error) {
-		l, e := a.auth.SignIn(x.Email, x.Password)
+		l, e := a.auth.SignIn(c.ctx, x.Email, x.Password)
 		return c.issue(200, l, e)
 	}))
 	a.on("getPrincipal", current, func(c *call) (any, error) { return principal(c.login), nil })
 	a.on("refreshSession", public, func(c *call) (any, error) {
-		l, e := a.auth.Rotate(c.refreshCookie, c.id("Idempotency-Key"))
+		l, e := a.auth.Rotate(c.ctx, c.refreshCookie, c.id("Idempotency-Key"))
 		return c.issue(200, l, e)
 	})
 	a.on("signOut", current, func(c *call) (any, error) {
-		a.auth.Revoke(c.login)
+		if err := a.auth.Revoke(c.ctx, c.accessCookie); err != nil {
+			return nil, err
+		}
 		sessionCookies(c, nil)
 		c.status = 204
 		return nil, nil

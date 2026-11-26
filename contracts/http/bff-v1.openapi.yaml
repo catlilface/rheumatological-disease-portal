@@ -5,7 +5,8 @@ info:
   description: |
     Проект контракта для фронтенда. Ответы — JSON (snake_case) или PDF, транспорт — HTTPS.
     По умолчанию требуется действующая сессия. Для скрининга достаточно гостевой;
-    /me и запись на форуме требуют регистрации; /moderation — права модератора.
+    В режиме MIS-30 доступны IAM (гость и вход editor/admin), гостевой скрининг, собственные результаты и PDF,
+    статусы своих операций, библиотека и маршрут к врачу. Регистрация, ЛК, форум, ссылки и пояснения — только тестовый мок, не работающие маршруты MVP.
     Для чужого частного ресурса возвращается 404. Для медицинских данных ЛК требуется
     действующее согласие. Данные, секреты и статусы операций не кешируются (no-store).
     В разделе Responses каждой операции указаны её HTTP-коды. У ошибки JSON есть `code`, `message` и `request_id`.
@@ -13,7 +14,7 @@ info:
     Для POST, PUT и DELETE тело, которое не удалось прочитать (в том числе больше 1 МиБ), даёт `422 VALIDATION_ERROR`.
     `202` подтверждает приём команды, а не её выполнение: читайте `status_url`. При `state=rejected` или `failed`
     причина находится в `error.code` ответа `200`, а не в HTTP-статусе исходной команды.
-    Ограничение частоты (`429`) в демостенде не настроено. Ответы `503` от зависимых сервисов предусмотрены контрактом, но не имитируются.
+    Ограничение частоты (`429`) в демостенде не настроено. При недоступности IAM защищённые запросы возвращают `503 AUTHORIZATION_UNAVAILABLE`.
     Регистрация, управление сессиями и отзыв согласия подтверждаются синхронно.
 servers: [{url: /api/v1}]
 security: [{session: []}]
@@ -59,6 +60,9 @@ components:
     SessionRequired: &session401
       description: Сессионная cookie `portal_session` отсутствует, недействительна или истекла (`SESSION_REQUIRED`).
       content: *errorBody
+    NotOwned: &notOwned404
+      description: Действие недоступно или ресурс не найден у владельца (`NOT_FOUND`).
+      content: *errorBody
     BrowserDenied: &browser403
       description: Проверка браузерного запроса не пройдена (`BROWSER_REQUEST_DENIED`). Нужны доверенный `Origin` и заголовок `X-Portal-Request` со значением `1`.
       content: *errorBody
@@ -83,11 +87,14 @@ components:
     InternalError: &internal500
       description: BFF не смог обработать запрос из-за непредвиденной внутренней ошибки (`INTERNAL_ERROR`). При обращении в поддержку укажите `request_id`.
       content: *errorBody
+    AuthorizationUnavailable: &iam503
+      description: Нет актуального ответа IAM (`AUTHORIZATION_UNAVAILABLE`); данные и новые полномочия не выдаются.
+      content: *errorBody
     CommandUnavailable: &command503
-      description: Сервис временно не может принять команду (предусмотрено контрактом, не имитируется стендом). Для повтора используйте тот же `Idempotency-Key`.
+      description: Недоступен IAM (`AUTHORIZATION_UNAVAILABLE`) или обработчик команды. Для повтора команды используйте тот же `Idempotency-Key`.
       content: *errorBody
     FileUnavailable: &file503
-      description: Сервис файлов временно не может выдать PDF (предусмотрено контрактом, не имитируется стендом). Повторите скачивание позже.
+      description: Недоступен IAM (`AUTHORIZATION_UNAVAILABLE`) или сервис файлов. Повторите скачивание позже.
       content: *errorBody
     Principal: {description: Сеанс без секретов, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Principal'}}}}
     SessionCreated:
@@ -117,6 +124,7 @@ paths:
         '409': {description: 'По этому ключу уже выдана гостевая сессия, но при повторе нет соответствующей cookie (`GUEST_SESSION_ALREADY_ISSUED`).', content: *errorBody}
         '422': *key422
         '500': *internal500
+        '503': *iam503
   /auth/medical-data-policy:
     get:
       tags: [Сессии и согласие]
@@ -128,6 +136,7 @@ paths:
         '200': {description: Действующая редакция, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Policy'}}}}
         '400': *host400
         '500': *internal500
+  # Future/demo routes are not mounted in the IAM-backed MVP.
   /auth/registrations:
     post:
       tags: [Сессии и согласие]
@@ -156,11 +165,12 @@ paths:
         '400': *host400
         '401': *session401
         '500': *internal500
+        '503': *iam503
     post:
       tags: [Сессии и согласие]
       operationId: signIn
       summary: Войти
-      description: Проверяет адрес электронной почты и пароль и устанавливает новые cookie сессии. При неверных данных возвращает `401`.
+      description: Проверяет адрес электронной почты и пароль заранее созданного editor/admin и устанавливает новые cookie сессии. При неверных данных возвращает `401`.
       security: []
       parameters: [*csrf]
       requestBody: {required: true, content: {application/json: {schema: {$ref: 'schemas.yaml#/$defs/Credentials'}}}}
@@ -171,6 +181,7 @@ paths:
         '403': *browser403
         '422': {description: 'Тело не соответствует схеме входа (`VALIDATION_ERROR`), например отсутствует пароль или неверен формат email.', content: *errorBody}
         '500': *internal500
+        '503': *iam503
     delete:
       tags: [Сессии и согласие]
       operationId: signOut
@@ -184,6 +195,7 @@ paths:
         '403': *browser403
         '422': &unexpectedBody422 {description: 'Тело не требуется. Если оно отправлено, но превышает 1 МиБ или не может быть прочитано, возвращается `VALIDATION_ERROR`.', content: *errorBody}
         '500': *internal500
+        '503': *iam503
   /auth/session/refresh:
     post:
       tags: [Сессии и согласие]
@@ -195,10 +207,11 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/SessionCreated'}
         '400': *write400
-        '401': {description: 'Нет действующей `portal_refresh`: cookie не передана, истекла или уже заменена. При повторе с тем же ключом обновлённая сессия также должна оставаться действующей (`SESSION_REQUIRED`).', content: *errorBody}
+        '401': {description: 'Нет действующей `portal_refresh` (`SESSION_REQUIRED`). Повтор старого refresh, даже с тем же Idempotency-Key, отзывает семейство. Не повторять запрос автоматически после неопределённого сетевого исхода.', content: *errorBody}
         '403': *browser403
         '422': *key422
         '500': *internal500
+        '503': *iam503
   /me/medical-data-consent:
     delete:
       tags: [Сессии и согласие]
@@ -230,6 +243,7 @@ paths:
         '404': {description: 'У инициатора нет операции с таким ID в указанном сервисе (`NOT_FOUND`). Используйте `status_url` из исходного ответа; чужие операции не видны.', content: *errorBody}
         '422': {description: 'Неизвестное значение `owner` или `operation_id` не является UUID (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
+        '503': *iam503
   /surveys/{survey_id}:
     parameters: [{in: path, name: survey_id, required: true, schema: {type: string}}]
     get:
@@ -258,6 +272,7 @@ paths:
         '401': *session401
         '403': *browser403
         '409': *key409
+        '404': *notOwned404
         '422': {description: 'Отсутствует или неверен UUID ключа, не указаны анкета и её версии либо `disclaimer_accepted` не равно `true` (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
         '503': *command503
@@ -275,6 +290,7 @@ paths:
         '404': &screening404 {description: 'Прохождение с таким `screening_id` не найдено у текущего пользователя. Для чужого прохождения ответ тот же (`NOT_FOUND`).', content: *errorBody}
         '422': &screening422 {description: 'Параметр `screening_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
+        '503': *iam503
   /screenings/{screening_id}/answers:
     parameters: [*sid]
     post:
@@ -290,6 +306,7 @@ paths:
         '401': *session401
         '403': *browser403
         '409': *key409
+        '404': *notOwned404
         '422': {description: 'Неверен UUID прохождения или ключа; в теле нужны положительная версия, код вопроса и значение — строка либо boolean (`VALIDATION_ERROR`). Соответствие значения конкретному вопросу проверяется после приёма команды.', content: *errorBody}
         '500': *internal500
         '503': *command503
@@ -308,6 +325,7 @@ paths:
         '401': *session401
         '403': *browser403
         '409': *key409
+        '404': *notOwned404
         '422': &revision422 {description: 'Требуются UUID прохождения и ключа идемпотентности, а также целое `expected_session_version` не меньше 1 (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
         '503': *command503
@@ -326,6 +344,7 @@ paths:
         '401': *session401
         '403': *browser403
         '409': *key409
+        '404': *notOwned404
         '422': *revision422
         '500': *internal500
         '503': *command503
@@ -344,6 +363,7 @@ paths:
         '401': *session401
         '403': *browser403
         '409': *key409
+        '404': *notOwned404
         '422': *revision422
         '500': *internal500
         '503': *command503
@@ -362,6 +382,7 @@ paths:
         '409': {description: 'Прохождение найдено, но ни одна версия результата ещё не зафиксирована (`RESULT_NOT_READY`).', content: *errorBody}
         '422': *screening422
         '500': *internal500
+        '503': *iam503
   /results/{result_id}/versions/{version}:
     parameters: &resultPath [{in: path, name: result_id, required: true, schema: *id}, {in: path, name: version, required: true, schema: {$ref: 'schemas.yaml#/$defs/Version'}}]
     get:
@@ -376,6 +397,7 @@ paths:
         '404': {description: 'Результат или запрошенная версия отсутствует либо результат принадлежит другому пользователю (`NOT_FOUND`).', content: *errorBody}
         '422': &result422 {description: 'Параметр `result_id` должен быть UUID, `version` — целым числом не меньше 1 (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
+        '503': *iam503
   /results/{result_id}/versions/{version}/explanation:
     parameters: *resultPath
     post:
@@ -718,6 +740,7 @@ paths:
         '401': *session401
         '403': {description: 'Нужны доверенный `Origin` и `X-Portal-Request` со значением `1` (`BROWSER_REQUEST_DENIED`). Для `kind=doctor` также нужна сессия пациента с действующим согласием (`CONSENT_REQUIRED`); для `screening` достаточно гостевой.', content: *errorBody}
         '409': *key409
+        '404': *notOwned404
         '422': {description: 'Неверен UUID ключа или состав запроса для выбранного `kind`: для `screening` нужны ID и версия результата, для `doctor` — корректный период и непустой список разделов (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
         '503': *command503
@@ -736,6 +759,7 @@ paths:
         '404': &report404 {description: 'Отчёта с таким ID нет у владельца сессии. Чужой отчёт также возвращает `NOT_FOUND`, чтобы не раскрывать его существование.', content: *errorBody}
         '422': &report422 {description: 'Параметр `report_id` должен быть UUID (`VALIDATION_ERROR`).', content: *errorBody}
         '500': *internal500
+        '503': *iam503
   /reports/{report_id}/pdf:
     parameters: [*reportId]
     get:
