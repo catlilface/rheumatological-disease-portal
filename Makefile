@@ -9,7 +9,7 @@ prepare:
 migrate: prepare
 	docker compose up -d --wait postgres
 	docker compose run --rm --no-deps db-bootstrap
-	sh infra/db/run-dbmate.sh "$$(docker compose ps -q postgres)"
+	sh infra/db/migrate.sh --docker "$$(docker compose ps -q postgres)"
 
 down:
 	docker compose down
@@ -32,7 +32,7 @@ up-bff-delivery:
 	@MIS_BFF_DB=true sh infra/db/prepare.sh
 	$(BFF_DELIVERY_COMPOSE) up -d --wait postgres kafka
 	$(BFF_DELIVERY_COMPOSE) run --rm --no-deps db-bootstrap
-	MIS_BFF_DB=true sh infra/db/run-dbmate.sh "$$($(BFF_DELIVERY_COMPOSE) ps -q postgres)"
+	MIS_BFF_DB=true sh infra/db/migrate.sh --docker "$$($(BFF_DELIVERY_COMPOSE) ps -q postgres)"
 	$(BFF_DELIVERY_COMPOSE) up --build -d --wait bff
 
 test-bff-delivery:
