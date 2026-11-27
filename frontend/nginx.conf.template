@@ -16,8 +16,9 @@ server {
 
   client_max_body_size ${NGINX_CLIENT_MAX_BODY_SIZE};
 
-  # Docker DNS; lets nginx start even when the backend is not running yet
+  # Resolve the BFF at request time using the container's DNS.
   resolver ${NGINX_RESOLVER} valid=30s ipv6=off;
+  resolver_timeout 5s;
 
   location /assets/ {
     expires 1y;
@@ -28,12 +29,27 @@ server {
   # Backend API with WebSocket support (e.g. streaming LLM output)
   location /api/ {
     set $backend ${NGINX_BACKEND_URL};
+    set $portal_origin "${NGINX_PUBLIC_ORIGIN}";
+    if ($portal_origin = '') {
+      set $portal_origin $scheme://$http_host;
+    }
+
+    # Only a request from the portal origin can inherit the upstream origin.
+    set $backend_origin '';
+    if ($http_origin = $portal_origin) {
+      set $backend_origin $backend;
+    }
     proxy_pass $backend;
     proxy_http_version 1.1;
+    proxy_ssl_server_name on;
+    proxy_ssl_verify on;
+    proxy_ssl_verify_depth 3;
+    proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
 
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection $connection_upgrade;
-    proxy_set_header Host $host;
+    proxy_set_header Host $proxy_host;
+    proxy_set_header Origin $backend_origin;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;

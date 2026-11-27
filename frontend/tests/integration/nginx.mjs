@@ -84,4 +84,19 @@ describe('nginx', () => {
     assert.equal(response.status, 200)
     assert.match(await response.text(), /<div id="root"><\/div>/)
   })
+
+  for (const route of [
+    '/screening',
+    '/screening/02995529-91a3-4550-aa71-aa9fe798d274',
+    '/results/02995529-91a3-4550-aa71-aa9fe798d274/versions/1',
+    '/library',
+    '/library/demo-article',
+    '/doctor',
+  ]) {
+    it(`serves the SPA directly at ${route}`, async () => {
+      const response = await get(route)
+      assert.equal(response.status, 200)
+      assert.match(await response.text(), /<div id="root"><\/div>/)
+    })
+  }
 })

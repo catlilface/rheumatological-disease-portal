@@ -24,7 +24,7 @@ test-infra:
 test-kind:
 	bash infra/kind/check.sh
 
-BFF_DELIVERY_COMPOSE := docker compose -f docker-compose.yaml -f infra/bff-delivery.compose.yaml
+BFF_DELIVERY_COMPOSE := docker compose -f compose.yaml -f infra/bff-delivery.compose.yaml
 
 .PHONY: up-bff-delivery test-bff-delivery
 

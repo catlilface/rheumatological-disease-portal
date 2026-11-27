@@ -60,7 +60,7 @@ type Settings struct {
 func Defaults() Settings {
 	return Settings{
 		Name:  "Rheumatological Disease Portal",
-		Hosts: []string{"localhost", "127.0.0.1"},
+		Hosts: []string{"localhost", "127.0.0.1", "bff", "server"},
 		CORS:  CORS{Methods: []string{http.MethodGet}, MaxAge: 600},
 		HTTP: HTTP{
 			Address:           ":8000",

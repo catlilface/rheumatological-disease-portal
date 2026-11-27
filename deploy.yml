@@ -1,13 +1,9 @@
+# Запуск из корня репозитория. В .env задайте TAG_NAME, общий для всех образов.
 x-health: &health
   interval: 10s
   timeout: 8s
   retries: 10
   start_period: 15s
-
-# Временный билд, пока сервисы не реализованы
-x-build: &build
-  context: .
-  dockerfile: packages/service-runtime/Dockerfile
 
 x-grpc: &grpc
   restart: unless-stopped
@@ -34,17 +30,27 @@ x-worker: &worker
       condition: service_healthy
 
 services:
+  frontend:
+    image: ghcr.io/catlilface/rheumatology-portal-frontend:${TAG_NAME:?Set TAG_NAME}
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - edge
+    environment:
+      NGINX_BACKEND_URL: ${NGINX_BACKEND_URL:-http://bff:8000}
+      NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-100m}
+      NGINX_RESOLVER: ${NGINX_RESOLVER:-127.0.0.11}
+
   bff:
-    image: rdp-bff:mvp
-    build:
-      context: .
-      dockerfile: services/bff/Dockerfile
+    image: ghcr.io/catlilface/rheumatology-portal-bff:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
     ports:
       - "8000:8000"
     networks:
-      - edge
-      - rpc
+      edge:
+        aliases: [server] # Совместимость с NGINX_BACKEND_URL=http://server:8000
+      rpc:
     env_file:
       - .env
     healthcheck:
@@ -53,14 +59,12 @@ services:
 
   iam:
     <<: *grpc
-    image: rdp-iam:mvp
-    build: {<<: *build, args: {SERVICE: iam}}
+    image: ghcr.io/catlilface/rheumatology-portal-iam:${TAG_NAME:?Set TAG_NAME}
     volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/iam:/run/secrets/db-password:ro"]
 
   files:
     <<: *grpc
-    image: rdp-files:mvp
-    build: {<<: *build, args: {SERVICE: files}}
+    image: ghcr.io/catlilface/rheumatology-portal-files:${TAG_NAME:?Set TAG_NAME}
     networks:
       - rpc
       - objects
@@ -69,25 +73,21 @@ services:
 
   screening:
     <<: *worker
-    image: rdp-screening:mvp
-    build: {<<: *build, args: {SERVICE: screening}}
+    image: ghcr.io/catlilface/rheumatology-portal-screening:${TAG_NAME:?Set TAG_NAME}
     volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/screening:/run/secrets/db-password:ro"]
 
   content:
     <<: *worker
-    image: rdp-content:mvp
-    build: {<<: *build, args: {SERVICE: content}}
+    image: ghcr.io/catlilface/rheumatology-portal-content:${TAG_NAME:?Set TAG_NAME}
     volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/content:/run/secrets/db-password:ro"]
 
   reporting:
     <<: *worker
-    image: rdp-reporting:mvp
-    build: {<<: *build, args: {SERVICE: reporting}}
+    image: ghcr.io/catlilface/rheumatology-portal-reporting:${TAG_NAME:?Set TAG_NAME}
     volumes: ["${MIS_SECRET_DIR:-./.secrets}/db/apps/reporting:/run/secrets/db-password:ro"]
 
   ai:
-    image: rdp-ai:mvp
-    build: {<<: *build, args: {SERVICE: ai}}
+    image: ghcr.io/catlilface/rheumatology-portal-ai:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
     environment: {PGHOST: postgres}
     networks: [databases, vectors]
@@ -98,7 +98,7 @@ services:
 
   db-bootstrap:
     profiles: [tools]
-    image: postgres:18.7-alpine3.23
+    image: ghcr.io/catlilface/rheumatology-portal-db-bootstrap:${TAG_NAME:?Set TAG_NAME}
     networks: [databases]
     secrets: [postgres-password]
     volumes:
@@ -108,7 +108,7 @@ services:
 
   db-migrate:
     profiles: [tools]
-    image: ghcr.io/amacneil/dbmate:2.38.2
+    image: ghcr.io/catlilface/rheumatology-portal-db-migrate:${TAG_NAME:?Set TAG_NAME}
     networks: [databases]
     entrypoint: [sh, /db/migrate.sh]
     volumes:
@@ -122,7 +122,7 @@ services:
       - ./services/ai/migrations:/services/ai/migrations:ro
 
   kafka:
-    image: apache/kafka:4.4.0
+    image: ghcr.io/catlilface/rheumatology-portal-kafka:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
     networks:
       - broker
@@ -134,7 +134,7 @@ services:
       test: [CMD, /opt/kafka/bin/kafka-topics.sh, --bootstrap-server, localhost:19092, --list]
 
   postgres:
-    image: postgres:18.7-alpine3.23
+    image: ghcr.io/catlilface/rheumatology-portal-postgres:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
     networks:
       - databases
@@ -149,7 +149,7 @@ services:
       test: [CMD, pg_isready, -h, localhost, -U, postgres, -d, postgres]
 
   seaweedfs:
-    image: chrislusf/seaweedfs:4.54
+    image: ghcr.io/catlilface/rheumatology-portal-seaweedfs:${TAG_NAME:?Set TAG_NAME}
     command: [server, -dir=/data, -ip=localhost, -ip.bind=0.0.0.0, -filer, -master.volumeSizeLimitMB=64, -volume.max=8]
     restart: unless-stopped
     networks:
@@ -161,7 +161,7 @@ services:
       test: [CMD, wget, -q, -O, /dev/null, 'http://localhost:8888/']
 
   qdrant:
-    image: qdrant/qdrant:v1.20.2
+    image: ghcr.io/catlilface/rheumatology-portal-qdrant:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
     networks:
       - vectors

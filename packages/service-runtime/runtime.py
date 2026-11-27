@@ -28,8 +28,8 @@ def reply(response=None, *, error=None, summary=''):
     return handle
 
 
-async def serve(name, register, handlers, command_type=None):
-    if 'PGHOST' in os.environ:  # Both local Compose and Kubernetes verify owner migrations.
+async def serve(name, register, handlers, command_type=None, *, command_handler=None):
+    if 'PGHOST' in os.environ:  # Compose and Kubernetes verify owner migrations.
         check_database(name)
     server = grpc.aio.server()
     register(handlers, server)
@@ -56,7 +56,8 @@ async def serve(name, register, handlers, command_type=None):
             except (DecodeError, ValueError):
                 logger.warning('kafka.result call={} topic={} outcome=invalid', call, topic)
                 raise
-            logger.info('kafka.result call={} topic={} action={} outcome=accepted_static', call, topic, action)
+            outcome = 'accepted_static' if command_handler is None else await command_handler(cmd)
+            logger.info('kafka.result call={} topic={} action={} outcome={}', call, topic, action, outcome)
 
         await broker.start()
     try:

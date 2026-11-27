@@ -179,7 +179,7 @@ Consumer фиксирует offset после commit. При повторной 
    ```
 
    Остановите демонстрационный стенд командой
-   `docker compose -f docker-compose.yaml -f infra/bff-delivery.compose.yaml down`.
+   `docker compose -f compose.yaml -f infra/bff-delivery.compose.yaml down`.
 
 Демонстрационные маршруты работают при `BFF_DELIVERY_ENABLED=true`. Обычный
 `make up` сохраняет изоляцию BFF от Kafka и PostgreSQL. Существующие маршруты

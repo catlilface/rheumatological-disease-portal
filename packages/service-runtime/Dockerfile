@@ -16,8 +16,8 @@ COPY packages/service-runtime/runtime.py packages/service-runtime/database.py ./
 
 ARG SERVICE
 
-COPY services/${SERVICE}/ ./
+COPY services/${SERVICE}/ ./service/
 
 USER 10001
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "service.main"]
