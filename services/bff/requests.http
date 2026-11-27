@@ -1,0 +1,214 @@
+@healthyOperation = 20000000-0000-4000-8000-000000000007
+@base = http://localhost:8000
+@deliveryPath = /_demo/delivery
+@entity = 00000000-0000-4000-8000-000000000029
+@healthyEntity = 00000000-0000-4000-8000-000000000030
+@firstMessage = 10000000-0000-4000-8000-000000000001
+@firstOperation = 20000000-0000-4000-8000-000000000001
+@gapOperation = 20000000-0000-4000-8000-000000000002
+@staleOperation = 20000000-0000-4000-8000-000000000008
+@retryOperation = 20000000-0000-4000-8000-000000000003
+@invalidOperation = 20000000-0000-4000-8000-000000000004
+@rejectOperation = 20000000-0000-4000-8000-000000000005
+@oversizedOperation = 20000000-0000-4000-8000-000000000006
+
+### Готовность BFF
+GET {{base}}/health
+
+### Версия 1, увеличение на 3. Повторите запрос после появления результата.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "{{firstMessage}}",
+  "operation_id": "{{firstOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 3
+}
+
+### После обработки ожидается {"status":"succeeded","result":{"value":3}}. До обработки возможен 404.
+GET {{base}}{{deliveryPath}}/operations/{{firstOperation}}
+
+### Ожидается {"value":3,"projected":3}, в том числе после повторной отправки.
+GET {{base}}{{deliveryPath}}/counters/{{entity}}
+
+### Две опубликованные записи, команда и событие.
+GET {{base}}{{deliveryPath}}/counters/{{entity}}/outbox
+
+### Тот же message_id с изменённой командой. Ожидается 409.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "{{firstMessage}}",
+  "operation_id": "{{firstOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 8
+}
+
+### Тот же operation_id и исходный payload с новым message_id. Ожидается 202, счётчик остаётся равен 3.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000011",
+  "operation_id": "{{firstOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 3
+}
+
+### Тот же operation_id с новым message_id и другим payload. Запись idempotency_conflict появится в DLQ.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000012",
+  "operation_id": "{{firstOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 8
+}
+
+### Версия 3 раньше версии 2.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000002",
+  "operation_id": "{{gapOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 3,
+  "action": "increment",
+  "delta": 1
+}
+
+### Ожидается {"error":"version_gap"}.
+GET {{base}}{{deliveryPath}}/operations/{{gapOperation}}
+
+### Новая команда для уже обработанной версии 1.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000008",
+  "operation_id": "{{staleOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 1
+}
+
+### Ожидается {"error":"stale_version"}.
+GET {{base}}{{deliveryPath}}/operations/{{staleOperation}}
+
+### Ошибка после записи счётчика и события в транзакции.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000003",
+  "operation_id": "{{retryOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 2,
+  "action": "retry",
+  "delta": 1
+}
+
+### Ожидается {"error":"handler_failed"} после трёх попыток, счётчик остаётся равен 3.
+GET {{base}}{{deliveryPath}}/operations/{{retryOperation}}
+
+### Обработчик возвращает результат, который PostgreSQL не может сохранить в JSONB.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000004",
+  "operation_id": "{{invalidOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 2,
+  "action": "invalid_outcome",
+  "delta": 1
+}
+
+### Ожидается {"error":"handler_failed"}, счётчик и проекция остаются равны 3.
+GET {{base}}{{deliveryPath}}/operations/{{invalidOperation}}
+
+### Неисправимая команда.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000005",
+  "operation_id": "{{rejectOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 2,
+  "action": "reject",
+  "delta": 1
+}
+
+### Ожидается {"error":"rejected"} после одной попытки.
+GET {{base}}{{deliveryPath}}/operations/{{rejectOperation}}
+
+### Первая успешная команда версии 2 создаёт слишком большое событие.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000006",
+  "operation_id": "{{oversizedOperation}}",
+  "entity_id": "{{entity}}",
+  "version": 2,
+  "action": "oversized_event",
+  "delta": 1
+}
+
+### Ожидается {"status":"succeeded","result":{"value":4}}.
+GET {{base}}{{deliveryPath}}/operations/{{oversizedOperation}}
+
+### У слишком большого события заполнены quarantined_at и publish_error.
+GET {{base}}{{deliveryPath}}/counters/{{entity}}/outbox
+
+### Другая сущность продолжает обрабатываться после карантина.
+POST {{base}}{{deliveryPath}}/commands
+Origin: {{base}}
+X-Portal-Request: 1
+Content-Type: application/json
+
+{
+  "message_id": "10000000-0000-4000-8000-000000000007",
+  "operation_id": "{{healthyOperation}}",
+  "entity_id": "{{healthyEntity}}",
+  "version": 1,
+  "action": "increment",
+  "delta": 1
+}
+
+### Ожидается {"value":1,"projected":1}.
+GET {{base}}{{deliveryPath}}/counters/{{healthyEntity}}

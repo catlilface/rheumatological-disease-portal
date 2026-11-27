@@ -85,6 +85,6 @@ spec:
         matchExpressions:
         - key: app
           operator: In
-          values: [iam, screening, content, reporting, files, ai, db-bootstrap, db-migrate]
+          values: [iam, screening, content, reporting, files, ai, db-bootstrap, dbmate]
     ports:
     - {protocol: TCP, port: 5432}

@@ -8,6 +8,7 @@ on:
       - "packages/service-runtime/**"
       - "contracts/**"
       - "infra/db/**"
+      - "infra/bff-delivery.compose.yaml"
       - "infra/check-transport.sh"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
@@ -79,6 +80,10 @@ jobs:
         run: |
           go vet ./...
           go test -race ./...
+
+      - name: Kafka and PostgreSQL delivery integration
+        if: matrix.service == 'bff'
+        run: make test-bff-delivery
 
       - name: Build BFF image
         if: matrix.service == 'bff'

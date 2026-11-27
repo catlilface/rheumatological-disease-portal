@@ -23,7 +23,7 @@ def docker(*args, env=None):
     return subprocess.check_output(["docker", *args], text=True, env=env).strip()
 
 
-def prepare_database(port, admin_password, app_password):
+def prepare_database(container, port, admin_password, app_password):
     def open_db(user, password, database="mis_screening"):
         return connect(host="127.0.0.1", port=port, user=user, password=password,
                        database=database, timeout=5)
@@ -48,6 +48,7 @@ def prepare_database(port, admin_password, app_password):
         cursor.execute(f"GRANT CONNECT ON DATABASE mis_screening TO {APP}")
 
     with closing(open_db("postgres", admin_password)) as connection, closing(connection.cursor()) as cursor:
+        cursor.execute(f"CREATE SCHEMA migration AUTHORIZATION {MIGRATOR}")
         cursor.execute("REVOKE ALL ON SCHEMA public FROM PUBLIC")
         cursor.execute(f"GRANT USAGE ON SCHEMA public TO {APP}")
         cursor.execute(
@@ -56,11 +57,20 @@ def prepare_database(port, admin_password, app_password):
         )
         connection.commit()
 
-    migrations = [ROOT / "infra/db/common/001_messaging.sql", *sorted((SCREENING / "migrations").glob("*.sql"))]
-    with closing(open_db(MIGRATOR, migrator_password)) as connection, closing(connection.cursor()) as cursor:
-        for migration in migrations:
-            cursor.execute(migration.read_text(encoding="utf-8").split("-- migrate:down", 1)[0])
-            connection.commit()
+    docker(
+        "run", "--rm", "--network", f"container:{container}",
+        "--env", "DATABASE_URL",
+        "--volume", f"{ROOT / 'infra/db/common'}:/db/common:ro",
+        "--volume", f"{SCREENING / 'migrations'}:/db/screening:ro",
+        "ghcr.io/amacneil/dbmate:2.38.2",
+        "--no-dump-schema", "--migration-lock",
+        "-d", "/db/common", "-d", "/db/screening", "migrate", "--strict",
+        env={
+            **os.environ,
+            "DATABASE_URL": (f"postgres://{MIGRATOR}:{migrator_password}@127.0.0.1:5432/"
+                             "mis_screening?sslmode=disable&search_path=migration"),
+        },
+    )
 
     with closing(open_db(APP, app_password)) as connection, closing(connection.cursor()) as cursor:
         cursor.execute((ROOT / "infra/db/tests/screening.sql").read_text(encoding="utf-8"))
@@ -83,7 +93,7 @@ def main():
         )
         try:
             port = int(docker("port", container, "5432/tcp").rsplit(":", 1)[-1])
-            prepare_database(port, admin_password, app_password)
+            prepare_database(container, port, admin_password, app_password)
             python_paths = [proto_dir, str(RUNTIME), os.environ.get("PYTHONPATH", "")]
             subprocess.run(
                 [sys.executable, "-m", "unittest", "discover", "-s", "services/screening/tests", "-v"],

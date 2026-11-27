@@ -10,7 +10,7 @@ REVOKE CONNECT, TEMP ON DATABASE postgres, template1 FROM PUBLIC;
 SELECT format('REVOKE CONNECT, TEMP ON DATABASE %I FROM PUBLIC', datname)
 FROM pg_database WHERE datname IN ('iam', 'screening', 'content', 'reporting', 'files', 'ai') \gexec
 SQL
-for owner in iam screening content reporting files ai; do
+for owner in iam screening content reporting files ai ${MIS_BFF_DB:+bff}; do
     db=mis_$owner; app=${db}_app; migrator=${db}_migrator
     APP_PASSWORD=$(cat "/credentials/apps/$owner"); export APP_PASSWORD
     MIGRATOR_PASSWORD=$(cat "/credentials/migrators/$owner"); export MIGRATOR_PASSWORD
@@ -32,4 +32,10 @@ CREATE SCHEMA IF NOT EXISTS migration AUTHORIZATION :"migrator";
 ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO :"app";
 SQL
+    if [ "$owner" = bff ]; then
+        psql -X -v ON_ERROR_STOP=1 -d "$db" -v app="$app" -v migrator="$migrator" <<'SQL'
+ALTER DEFAULT PRIVILEGES FOR ROLE :"migrator" IN SCHEMA public
+    GRANT USAGE ON SEQUENCES TO :"app";
+SQL
+    fi
 done

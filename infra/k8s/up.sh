@@ -11,7 +11,7 @@ kubectl create namespace rdp-mvp --dry-run=client -o yaml | kubectl apply -f -
 # Serialize config changes and Job recreation across installer processes.
 "${k[@]}" create configmap db-deploy-lock
 trap '"${k[@]}" delete configmap db-deploy-lock' EXIT
-for job in db-bootstrap db-migrate; do
+for job in db-bootstrap dbmate; do
   state=$("${k[@]}" get job "$job" --ignore-not-found -o 'jsonpath={.metadata.name}:{.spec.suspend}:{.status.conditions[?(@.status=="True")].type}')
   case $state in ''|*:true:*|*Complete*|*Failed*) ;; *) echo "Job $job is not finished" >&2; exit 1;; esac
 done
@@ -47,7 +47,7 @@ config db-scripts --from-file=infra/db/bootstrap.sh --from-file=infra/db/migrate
 config db-common --from-file=infra/db/common
 "${k[@]}" apply -f infra/k8s/postgres.yaml
 "${k[@]}" rollout status statefulset/postgres --timeout=180s
-"${k[@]}" delete job db-bootstrap db-migrate --ignore-not-found --wait=true
+"${k[@]}" delete job db-bootstrap dbmate --ignore-not-found --wait=true
 "${k[@]}" apply -f infra/k8s/db-jobs.yaml
 wait_job() {
   local job=$1
@@ -61,8 +61,8 @@ wait_job() {
   exit 1
 }
 wait_job db-bootstrap
-"${k[@]}" patch job db-migrate --type=merge -p '{"spec":{"suspend":false}}'
-wait_job db-migrate
+"${k[@]}" patch job dbmate --type=merge -p '{"spec":{"suspend":false}}'
+wait_job dbmate
 "${k[@]}" apply -k infra/k8s
 workloads=$("${k[@]}" get deploy,sts -o name)
 for workload in $workloads; do

@@ -1,0 +1,14 @@
+services:
+  bff:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    networks: [edge, rpc, databases, broker]
+    environment:
+      BFF_DELIVERY_ENABLED: "true"
+      BFF_DELIVERY_PUBLISH: "${BFF_DELIVERY_PUBLISH:-true}"
+    volumes:
+      - "${MIS_SECRET_DIR:-./.secrets}/db/apps/bff:/run/secrets/db-password:ro"
+
+  db-bootstrap:
+    environment:
+      MIS_BFF_DB: "true"
