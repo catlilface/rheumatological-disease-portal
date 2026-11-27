@@ -46,7 +46,7 @@ type Message struct {
 
 func (m Message) validate() error {
 	meta := m.Metadata
-	if !validTopic(m.Topic) || m.Payload == nil {
+	if !ValidTopic(m.Topic) || m.Payload == nil {
 		return errors.New("invalid delivery topic or payload")
 	}
 	if meta.ID == uuid.Nil || meta.OperationID == uuid.Nil || meta.EntityID == uuid.Nil ||
@@ -57,7 +57,7 @@ func (m Message) validate() error {
 	return nil
 }
 
-func validTopic(topic string) bool {
+func ValidTopic(topic string) bool {
 	return topicName.MatchString(topic) && topic != "." && topic != ".."
 }
 

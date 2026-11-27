@@ -33,7 +33,7 @@ type Delivery struct {
 }
 
 func New(db *sql.DB, broker Broker, opts Options) (*Delivery, error) {
-	if db == nil || broker == nil || !validTopic(opts.DeadLetterTopic) ||
+	if db == nil || broker == nil || !ValidTopic(opts.DeadLetterTopic) ||
 		opts.MaxAttempts < 1 || opts.RetryDelay < 0 || opts.PublishTimeout <= 0 {
 		return nil, errors.New("invalid delivery configuration")
 	}

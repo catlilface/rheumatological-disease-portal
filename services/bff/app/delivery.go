@@ -50,7 +50,7 @@ func startDelivery(ctx context.Context, cfg config.Delivery) (*deliveryRuntime, 
 		return nil, nil, errors.New("delivery database is unavailable or migrations are missing")
 	}
 	transport, err := delivery.New(db, producer, delivery.Options{
-		DeadLetterTopic: cfg.TopicPrefix + ".dead",
+		DeadLetterTopic: cfg.DeadLetterTopic(),
 		MaxAttempts:     cfg.MaxAttempts, RetryDelay: cfg.RetryDelay, PublishTimeout: cfg.PublishTimeout,
 	})
 	if err != nil {
@@ -60,7 +60,7 @@ func startDelivery(ctx context.Context, cfg config.Delivery) (*deliveryRuntime, 
 	counters := repo.DeliveryCounters{DB: db}
 	demo := service.DeliveryDemo{
 		Transport: transport, Counters: counters,
-		CommandTopic: cfg.TopicPrefix + ".commands", EventTopic: cfg.TopicPrefix + ".events",
+		CommandTopic: cfg.CommandTopic(), EventTopic: cfg.EventTopic(),
 	}
 	if cfg.Publish {
 		workers.Go(func() {

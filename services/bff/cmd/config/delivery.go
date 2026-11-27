@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"portal/bff/pkg/delivery"
 )
 
 type Delivery struct {
@@ -16,6 +18,10 @@ type Delivery struct {
 	MaxAttempts                              int
 	RetryDelay, PollInterval, PublishTimeout time.Duration
 }
+
+func (cfg Delivery) CommandTopic() string    { return cfg.TopicPrefix + ".commands" }
+func (cfg Delivery) EventTopic() string      { return cfg.TopicPrefix + ".events" }
+func (cfg Delivery) DeadLetterTopic() string { return cfg.TopicPrefix + ".dead" }
 
 func deliverySettings(source map[string]string) (Delivery, error) {
 	cfg := Delivery{
@@ -67,6 +73,11 @@ func deliverySettings(source map[string]string) (Delivery, error) {
 	}
 	if cfg.Brokers == "" || cfg.TopicPrefix == "" || cfg.Group == "" {
 		return cfg, errors.New("delivery brokers, topic prefix and group are required")
+	}
+	for _, topic := range []string{cfg.CommandTopic(), cfg.EventTopic(), cfg.DeadLetterTopic()} {
+		if !delivery.ValidTopic(topic) {
+			return cfg, errors.New("invalid BFF_DELIVERY_TOPIC_PREFIX: derived Kafka topic name is invalid")
+		}
 	}
 	if cfg.DSN == "" {
 		file := source["BFF_DELIVERY_PASSWORD_FILE"]
