@@ -12,9 +12,3 @@ services:
   db-bootstrap:
     environment:
       MIS_BFF_DB: "true"
-
-  db-migrate:
-    environment:
-      MIS_BFF_DB: "true"
-    volumes:
-      - ./services/bff/migrations:/services/bff/migrations:ro
