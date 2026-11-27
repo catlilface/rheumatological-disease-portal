@@ -11,11 +11,14 @@ on:
       - "packages/service-runtime/**"
       - "contracts/**"
       - "infra/db/**"
+      - "infra/bff-delivery.compose.yaml"
+      - "infra/tests/compose-ports.sh"
       - "infra/check-transport.sh"
       - "infra/k8s/check-http.py"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
       - "compose.yaml"
+      - "deploy.yml"
       - ".env.example"
       - "Makefile"
       - ".dockerignore"
@@ -44,6 +47,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Verify only the frontend port is published in each stack
+        run: bash infra/tests/compose-ports.sh
       - run: make up
       - name: Verify IAM sessions against PostgreSQL and through the BFF
         run: |
@@ -91,6 +96,10 @@ jobs:
         run: |
           go vet ./...
           go test -race ./...
+
+      - name: Kafka and PostgreSQL delivery integration
+        if: matrix.service == 'bff'
+        run: make test-bff-delivery
 
       - name: Build BFF image
         if: matrix.service == 'bff'

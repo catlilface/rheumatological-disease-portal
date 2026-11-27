@@ -26,8 +26,8 @@ server {
     try_files $uri =404;
   }
 
-  # BFF API and Scalar documentation share the same upstream.
-  location ~ ^/(api|scalar)(/|$) {
+  # BFF mounts /_demo/delivery only in the optional delivery stand.
+  location ~ ^/(api|scalar|_demo/delivery)(/|$) {
     set $backend ${NGINX_BACKEND_URL};
     set $portal_origin "${NGINX_PUBLIC_ORIGIN}";
     if ($portal_origin = '') {

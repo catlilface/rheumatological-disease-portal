@@ -11,5 +11,5 @@
 - [IAM: гостевые сессии, вход editor/admin, ротация и отзыв](services/iam/README.md).
 - [BFF на Go: слои, запуск и тесты](services/bff/README.md#5-структура-backend).
 - [Проект REST API BFF](docs/bff-rest-api.md) — эндпоинты для фронтенда, форматы запросов и ответов. [OpenAPI v1 (черновик)](contracts/http/bff-v1.openapi.yaml). [Запуск и ограничения моков BFF](services/bff/README.md#7-mock-api-v1-для-фронтенда).
-- После запуска BFF откройте [Scalar API Reference](http://localhost:8000/scalar), чтобы посмотреть документацию `/api/v1`.
+- После запуска BFF откройте [Scalar API Reference](http://localhost:8080/scalar), чтобы посмотреть документацию `/api/v1`.
 - [Внутренние контракты](contracts/) — форматы команд, событий и gRPC-вызовов между сервисами.

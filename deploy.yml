@@ -128,21 +128,6 @@ services:
       - ${MIS_SECRET_DIR:-./.secrets}/db:/credentials:ro
     entrypoint: [sh, /bootstrap.sh]
 
-  db-migrate:
-    profiles: [tools]
-    image: ghcr.io/catlilface/rheumatology-portal-db-migrate:${TAG_NAME:?Set TAG_NAME}
-    networks: [databases]
-    entrypoint: [sh, /db/migrate.sh]
-    volumes:
-      - ./infra/db:/db:ro
-      - ${MIS_SECRET_DIR:-./.secrets}/db/migrators:/credentials:ro
-      - ./services/iam/migrations:/services/iam/migrations:ro
-      - ./services/screening/migrations:/services/screening/migrations:ro
-      - ./services/content/migrations:/services/content/migrations:ro
-      - ./services/reporting/migrations:/services/reporting/migrations:ro
-      - ./services/files/migrations:/services/files/migrations:ro
-      - ./services/ai/migrations:/services/ai/migrations:ro
-
   kafka:
     image: ghcr.io/catlilface/rheumatology-portal-kafka:${TAG_NAME:?Set TAG_NAME}
     restart: unless-stopped
