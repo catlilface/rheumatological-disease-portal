@@ -33,7 +33,8 @@ CREATE TABLE kafka_outbox (
         OR (quarantined_at IS NOT NULL AND publish_error IS NOT NULL AND published_at IS NULL)
     )
 );
-CREATE INDEX kafka_outbox_pending ON kafka_outbox (position) WHERE published_at IS NULL;
+CREATE INDEX kafka_outbox_pending ON kafka_outbox (position)
+    WHERE published_at IS NULL AND quarantined_at IS NULL;
 CREATE INDEX kafka_outbox_quarantined_key
     ON kafka_outbox (topic, entity_key, position) WHERE quarantined_at IS NOT NULL;
 
