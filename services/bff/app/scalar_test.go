@@ -13,12 +13,12 @@ func TestScalarReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api, err := Build(root, config.Defaults())
+	api, err := buildDemo(root, config.Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for path, marker := range map[string]string{
-		"/scalar":                     "/scalar/bff-v1.openapi.yaml",
+		"/scalar":                     `url: '/scalar/bff-v1.openapi.yaml'`,
 		"/scalar/bff-v1.openapi.yaml": "schemas.yaml#/$defs/Accepted",
 		"/scalar/schemas.yaml":        "$defs:",
 	} {

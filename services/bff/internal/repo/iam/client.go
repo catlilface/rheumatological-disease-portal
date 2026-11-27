@@ -1,0 +1,211 @@
+// Package iam is the BFF's only production source of user identity.
+package iam
+
+import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
+
+	common "portal/bff/internal/gen/commonv1"
+	pb "portal/bff/internal/gen/iamv1"
+	"portal/bff/internal/models"
+	"portal/bff/internal/service"
+)
+
+type Client struct{ rpc pb.IamServiceClient }
+
+func Dial(target, dir string) (*Client, error) {
+	cert, err := tls.LoadX509KeyPair(filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key"))
+	if err != nil {
+		return nil, err
+	}
+	pem, err := os.ReadFile(filepath.Join(dir, "ca.crt"))
+	if err != nil {
+		return nil, err
+	}
+	ca := x509.NewCertPool()
+	if !ca.AppendCertsFromPEM(pem) {
+		return nil, errors.New("invalid IAM CA")
+	}
+	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, RootCAs: ca, Certificates: []tls.Certificate{cert}})), grpc.WithDisableRetry())
+	if err != nil {
+		return nil, err
+	}
+	return &Client{pb.NewIamServiceClient(conn)}, nil
+}
+
+func unavailable() error { return models.Fail(models.Unavailable, "AUTHORIZATION_UNAVAILABLE") }
+func failure(err error, unauthenticated string) error {
+	switch status.Code(err) {
+	case codes.Unauthenticated:
+		return models.Fail(models.Unauthenticated, unauthenticated)
+	case codes.AlreadyExists:
+		return models.Fail(models.Conflict, "GUEST_SESSION_ALREADY_ISSUED")
+	default:
+		return unavailable()
+	}
+}
+func login(p *pb.Principal) (*service.Login, error) {
+	if p.GetActor().GetSubjectId() == "" || p.GetActor().GetSessionId() == "" || p.GetSessionExpiresAt().CheckValid() != nil {
+		return nil, unavailable()
+	}
+	kind := "guest"
+	roles := []string{}
+	if !p.IsGuest {
+		if len(p.Roles) != 1 {
+			return nil, unavailable()
+		}
+		kind = "staff"
+		switch p.Roles[0] {
+		case pb.UserRole_USER_ROLE_PATIENT:
+			kind = "member"
+			roles = append(roles, "patient")
+		case pb.UserRole_USER_ROLE_ADMIN:
+			roles = append(roles, "admin")
+		case pb.UserRole_USER_ROLE_EDITOR:
+			roles = append(roles, "editor")
+		default:
+			return nil, unavailable()
+		}
+	} else if len(p.Roles) != 0 {
+		return nil, unavailable()
+	}
+	return &service.Login{Actor: &models.Actor{ID: p.Actor.SubjectId, Kind: kind, Consent: kind == "member" && p.HasMedicalConsent}, SessionID: p.Actor.SessionId, Roles: roles, Expires: p.SessionExpiresAt.AsTime()}, nil
+}
+func pair(t *pb.TokenPair, err error, code string) (*service.Login, error) {
+	if err != nil {
+		return nil, failure(err, code)
+	}
+	if t.GetAccessToken() == "" || t.GetRefreshToken() == "" || t.GetAccessExpiresAt().CheckValid() != nil || t.GetRefreshExpiresAt().CheckValid() != nil {
+		return nil, unavailable()
+	}
+	l, err := login(t.Principal)
+	if err != nil {
+		return nil, err
+	}
+	l.Access, l.Refresh = t.AccessToken, t.RefreshToken
+	l.AccessExpires = t.AccessExpiresAt.AsTime()
+	return l, nil
+}
+func (c *Client) Guest(ctx context.Context, key, cookie string) (*service.Login, error) {
+	p, e := c.rpc.CreateGuestSession(ctx, &pb.CreateGuestSessionRequest{RequestId: key, AccessToken: cookie})
+	return pair(p, e, "SESSION_REQUIRED")
+}
+func (c *Client) Register(ctx context.Context, key, access, email, password string, consent service.MedicalConsent) (*service.Login, error) {
+	if !consent.Accepted {
+		return nil, models.Fail(models.Invalid, "VALIDATION_ERROR")
+	}
+	if consent.Version != service.PolicyVersion {
+		return nil, models.Fail(models.Invalid, "CONSENT_VERSION_MISMATCH")
+	}
+	t, e := c.rpc.RegisterPatient(ctx, &pb.RegisterPatientRequest{RequestId: key, Email: email, Password: password, ConsentVersion: consent.Version, GuestAccessToken: access})
+	switch status.Code(e) {
+	case codes.AlreadyExists:
+		return nil, models.Fail(models.Conflict, "ACCOUNT_ALREADY_EXISTS")
+	case codes.FailedPrecondition:
+		return nil, models.Fail(models.Conflict, "IDEMPOTENCY_KEY_REUSED")
+	case codes.InvalidArgument:
+		return nil, models.Fail(models.Invalid, "VALIDATION_ERROR")
+	}
+	return pair(t, e, "SESSION_REQUIRED")
+}
+func (c *Client) SetRole(ctx context.Context, token, email, role string) error {
+	roles := map[string]pb.UserRole{"admin": pb.UserRole_USER_ROLE_ADMIN, "editor": pb.UserRole_USER_ROLE_EDITOR, "patient": pb.UserRole_USER_ROLE_PATIENT}
+	_, e := c.rpc.SetRole(ctx, &pb.SetRoleRequest{AccessToken: token, Email: email, Role: roles[role]})
+	switch status.Code(e) {
+	case codes.OK:
+		return nil
+	case codes.PermissionDenied:
+		return models.Fail(models.Forbidden, "ADMIN_REQUIRED")
+	case codes.InvalidArgument:
+		return models.Fail(models.Invalid, "VALIDATION_ERROR")
+	case codes.NotFound:
+		return models.NotFound()
+	}
+	return failure(e, "SESSION_REQUIRED")
+}
+func (c *Client) SignIn(ctx context.Context, email, password string) (*service.Login, error) {
+	p, e := c.rpc.SignInStaff(ctx, &pb.SignInStaffRequest{RequestId: uuid.NewString(), Email: email, Password: password})
+	return pair(p, e, "INVALID_CREDENTIALS")
+}
+func (c *Client) Rotate(ctx context.Context, token, key string) (*service.Login, error) {
+	p, e := c.rpc.RefreshTokens(ctx, &pb.RefreshTokensRequest{RequestId: key, RefreshToken: token})
+	return pair(p, e, "SESSION_REQUIRED")
+}
+func (c *Client) Session(ctx context.Context, token string) (*service.Login, error) {
+	if token == "" {
+		return nil, models.Fail(models.Unauthenticated, "SESSION_REQUIRED")
+	}
+	p, e := c.rpc.Authenticate(ctx, &pb.AuthenticateRequest{RequestId: uuid.NewString(), AccessToken: token})
+	if e != nil {
+		return nil, failure(e, "SESSION_REQUIRED")
+	}
+	l, err := login(p)
+	if err == nil {
+		l.Access = token
+	}
+	return l, err
+}
+func (c *Client) WithdrawConsent(ctx context.Context, token string) error {
+	_, err := c.rpc.WithdrawMedicalConsent(ctx, &pb.AuthenticateRequest{AccessToken: token})
+	if status.Code(err) == codes.PermissionDenied {
+		return models.Fail(models.Forbidden, "PATIENT_REQUIRED")
+	}
+	if err != nil {
+		return failure(err, "SESSION_REQUIRED")
+	}
+	return nil
+}
+func (c *Client) Revoke(ctx context.Context, token string) error {
+	_, e := c.rpc.EndSession(ctx, &pb.AuthenticateRequest{RequestId: uuid.NewString(), AccessToken: token})
+	if e != nil {
+		return failure(e, "SESSION_REQUIRED")
+	}
+	return nil
+}
+func (c *Client) Check(ctx context.Context, l *service.Login, action string, r models.Resource, owner string) (time.Time, error) {
+	resource := &common.ResourceReference{ResourceType: r.Type, ResourceId: r.ID}
+	if r.Version > 0 {
+		version := uint64(r.Version)
+		resource.Version = &version
+	}
+	d, e := c.rpc.CheckAccess(ctx, &pb.CheckAccessRequest{
+		Context:     &common.RequestContext{RequestId: uuid.NewString(), Actor: &common.ActorContext{SubjectId: l.Actor.ID, SessionId: l.SessionID}},
+		AccessToken: l.Access, Action: action, Resource: resource, ResourceOwnerSubjectId: owner,
+	})
+	if status.Code(e) == codes.InvalidArgument {
+		return time.Time{}, models.NotFound()
+	}
+	if e != nil {
+		return time.Time{}, failure(e, "SESSION_REQUIRED")
+	}
+	if !d.GetAllowed() {
+		if d.GetReasonCode() == "ACCESS_REVOKED" {
+			return time.Time{}, models.Fail(models.Unauthenticated, "SESSION_REQUIRED")
+		}
+		if (r.Type == "cabinet" || r.Type == "doctor_report" || r.Type == "cabinet_operation") && d.GetReasonCode() == "ACCESS_DENIED" {
+			if err := l.Actor.RequireRegistered(); err != nil {
+				return time.Time{}, err
+			}
+			if err := l.Actor.RequirePatient(); err != nil {
+				return time.Time{}, err
+			}
+		}
+		return time.Time{}, models.NotFound()
+	}
+	if d.GetEvaluatedAt().CheckValid() != nil || d.GetExpiresAt().CheckValid() != nil ||
+		d.ExpiresAt.AsTime().After(d.EvaluatedAt.AsTime().Add(5*time.Second)) || !time.Now().Before(d.ExpiresAt.AsTime()) {
+		return time.Time{}, unavailable()
+	}
+	return d.ExpiresAt.AsTime(), nil
+}

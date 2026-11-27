@@ -3,9 +3,11 @@ package models
 import "time"
 
 type Login struct {
-	Actor           *Actor
-	Access, Refresh string
-	Expires         time.Time
+	Actor                  *Actor
+	Access, Refresh        string
+	Expires, AccessExpires time.Time
+	SessionID              string
+	Roles                  []string
 }
 
 type Account struct {
@@ -21,6 +23,7 @@ type MedicalConsent struct {
 }
 
 type Principal struct {
+	SessionID        string    `json:"session_id"`
 	Kind             string    `json:"kind"`
 	Roles            []string  `json:"roles"`
 	SessionExpiresAt time.Time `json:"session_expires_at"`

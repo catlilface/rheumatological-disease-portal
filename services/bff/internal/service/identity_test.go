@@ -37,22 +37,43 @@ func TestRefreshRetriesCannotResurrectSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	prior := *guest
+	rotated, err := s.Rotate(prior.Refresh, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Session(prior.Access); err == nil {
+		t.Fatal("old access token accepted")
+	}
+	if _, err := s.Rotate(prior.Refresh, "r"); err == nil {
+		t.Fatal("old refresh token accepted with original key")
+	}
+	if _, err := s.Session(rotated.Access); err == nil {
+		t.Fatal("refresh replay did not revoke the family")
+	}
+	now = rotated.Expires
+	if _, err := s.Rotate(rotated.Refresh, "r"); err == nil {
+		t.Fatal("expired replay succeeded")
+	}
+}
+
+func TestRotationKeepsConfiguredSessionLifetime(t *testing.T) {
+	now := time.Now()
+	s := identity(&now)
+	s.SessionTTL = 30 * time.Minute
+	deadline := now.Add(s.SessionTTL)
+	guest, err := s.Guest("g", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := guest.SessionID
+	now = now.Add(time.Minute)
 	rotated, err := s.Rotate(guest.Refresh, "r")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Session(guest.Access); err == nil {
-		t.Fatal("old access token accepted")
-	}
-	if _, err := s.Rotate(guest.Refresh, "another-key"); err == nil {
-		t.Fatal("old refresh token accepted with new key")
-	}
-	if retry, err := s.Rotate(guest.Refresh, "r"); err != nil || retry != rotated {
-		t.Fatal("retry did not return same login")
-	}
-	now = rotated.Expires
-	if _, err := s.Rotate(guest.Refresh, "r"); err == nil {
-		t.Fatal("expired replay succeeded")
+	if id == "" || rotated.SessionID != id || !rotated.Expires.Equal(deadline) || !rotated.AccessExpires.Equal(deadline) {
+		t.Fatal("rotation changed the session ID or outlived the configured session")
 	}
 }
 

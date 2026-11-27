@@ -1,6 +1,7 @@
 """Transport support only. Domain responses are defined by the owning service."""
 import asyncio
 import os
+from pathlib import Path
 import signal
 from uuid import uuid4
 
@@ -28,13 +29,18 @@ def reply(response=None, *, error=None, summary=''):
     return handle
 
 
-async def serve(name, register, handlers, command_type=None, *, command_handler=None):
+async def serve(name, register, handlers, command_type=None, *, command_handler=None, private_tls=False):
     if 'PGHOST' in os.environ:  # Compose and Kubernetes verify owner migrations.
         check_database(name)
     server = grpc.aio.server()
     register(handlers, server)
     health_pb2_grpc.add_HealthServicer_to_server(health.aio.HealthServicer(), server)
-    server.add_insecure_port('[::]:50051')
+    if private_tls:
+        tls = Path('/run/iam-tls')
+        creds = grpc.ssl_server_credentials([((tls/'tls.key').read_bytes(), (tls/'tls.crt').read_bytes())], root_certificates=(tls/'ca.crt').read_bytes(), require_client_auth=True)
+        server.add_secure_port('[::]:50051', creds)
+    else:
+        server.add_insecure_port('[::]:50051')
     stopped = asyncio.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         asyncio.get_running_loop().add_signal_handler(sig, stopped.set)

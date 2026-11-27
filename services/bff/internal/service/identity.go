@@ -10,6 +10,8 @@ import (
 
 const PolicyVersion = "demo-medical-v1"
 
+const demoAccessTTL = 7 * 24 * time.Hour
+
 type Login = models.Login
 
 type Account = models.Account
@@ -20,6 +22,8 @@ type Passwords interface {
 }
 
 type ReplayKey = models.ReplayKey
+
+// Identity is the in-memory fixture for browser contract tests. The executable uses IAM.
 type Identity struct {
 	Runtime
 	Access, Refreshes Store[string, *Login]
@@ -32,11 +36,12 @@ type Identity struct {
 }
 
 func (s Identity) issue(a *models.Actor) *Login {
+	now := s.Now()
+	roles := map[string][]string{models.GuestActor: {}, models.MemberActor: {"patient"}, models.StaffActor: {"admin"}}
 	l := &Login{
-		Actor:   a,
-		Access:  s.Token(),
-		Refresh: s.Token(),
-		Expires: s.Now().Add(s.SessionTTL),
+		Actor: a, SessionID: s.ID(), Roles: roles[a.Kind],
+		Access: s.Token(), Refresh: s.Token(),
+		Expires: now.Add(s.SessionTTL), AccessExpires: now.Add(min(demoAccessTTL, s.SessionTTL)),
 	}
 	s.Access.Put(l.Access, l)
 	s.Refreshes.Put(l.Refresh, l)
@@ -45,7 +50,7 @@ func (s Identity) issue(a *models.Actor) *Login {
 
 func (s Identity) Session(cookie string) (*Login, error) {
 	l, ok := s.Access.Get(cookie)
-	if !ok || !s.Now().Before(l.Expires) {
+	if !ok || !s.Now().Before(l.AccessExpires) {
 		return nil, models.Fail(models.Unauthenticated, "SESSION_REQUIRED")
 	}
 	return l, nil
@@ -123,18 +128,20 @@ func (s Identity) Revoke(login *Login) {
 	s.Refreshes.Delete(login.Refresh)
 }
 
-func (s Identity) Rotate(cookie, key string) (*Login, error) {
-	k := ReplayKey{Scope: "refresh", Key: key, Credential: cookie}
-	if l, ok := s.Retries.Get(k); ok {
-		return s.Session(l.Access)
-	}
-	old, ok := s.Refreshes.Get(cookie)
-	if !ok || !s.Now().Before(old.Expires) {
+func (s Identity) Rotate(cookie, _ string) (*Login, error) {
+	l, ok := s.Refreshes.Get(cookie)
+	now := s.Now()
+	if !ok || !now.Before(l.Expires) {
 		return nil, models.Fail(models.Unauthenticated, "SESSION_REQUIRED")
 	}
-	s.Revoke(old)
-	l := s.issue(old.Actor)
-	s.Retries.Put(k, l)
-	s.Retries.Put(ReplayKey{Scope: "refresh", Key: key, Credential: l.Refresh}, l)
+	if cookie != l.Refresh {
+		s.Revoke(l)
+		return nil, models.Fail(models.Unauthenticated, "SESSION_REQUIRED")
+	}
+	s.Access.Delete(l.Access)
+	l.Access, l.Refresh = s.Token(), s.Token()
+	l.AccessExpires = now.Add(min(demoAccessTTL, l.Expires.Sub(now)))
+	s.Access.Put(l.Access, l)
+	s.Refreshes.Put(l.Refresh, l)
 	return l, nil
 }

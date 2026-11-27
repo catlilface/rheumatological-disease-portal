@@ -15,7 +15,7 @@ SERVICE = Path(__file__).resolve().parents[1]
 def executable(tmp_path_factory):
     tmp = tmp_path_factory.mktemp('go-bff')
     (tmp / 'contracts').symlink_to(SERVICE.parents[1] / 'contracts', target_is_directory=True)
-    subprocess.run(['go', 'build', '-o', str(tmp / 'bff'), './cmd/server'], cwd=SERVICE, check=True)
+    subprocess.run(['go', 'test', '-c', '-o', str(tmp / 'bff'), './app'], cwd=SERVICE, check=True)
     (tmp / 'ssl.cnf').write_text('[req]\nprompt=no\ndistinguished_name=name\nx509_extensions=ext\n'
                                  '[name]\nCN=localhost\n[ext]\nsubjectAltName=DNS:localhost\nbasicConstraints=CA:TRUE\n')
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
@@ -25,7 +25,7 @@ def executable(tmp_path_factory):
 
 @pytest.fixture
 def server(executable):
-    env = {'PATH': os.environ['PATH'], 'MOCK_MODERATOR_PASSWORD': 'demo-moderator'}
+    env = {'PATH': os.environ['PATH'], 'BFF_CONTRACT_TEST_SERVER': '1', 'MOCK_MODERATOR_PASSWORD': 'demo-moderator'}
     with subprocess.Popen(['./bff', '-addr', '127.0.0.1:0', '-tls-cert', 'cert.pem', '-tls-key', 'key.pem'],
                           cwd=executable, env=env, stderr=subprocess.PIPE, text=True) as proc:
         try:

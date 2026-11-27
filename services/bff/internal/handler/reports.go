@@ -6,6 +6,7 @@ import (
 )
 
 func (a *API) Reports(s service.Reports, document []byte) {
+	a.reports = s
 	a.on(opRequestPdf, current, bind(func(c *call, x models.ReportRequest) (any, error) {
 		if err := s.AuthorizeCreate(c.actor, x); err != nil {
 			return nil, err

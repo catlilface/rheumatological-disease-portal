@@ -107,6 +107,7 @@ export type ArticlePage = {
 export type Principal = {
   kind: 'guest' | 'member' | 'staff'
   roles: string[]
+  session_id: string
   session_expires_at: string
 }
 export type Receipt = { operation_id: string; status_url: string }

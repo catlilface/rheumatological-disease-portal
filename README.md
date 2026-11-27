@@ -8,7 +8,8 @@
 - Быстрый старт стенда: `make up`. Фронтенд доступен на [localhost:8080](http://localhost:8080). Запросы к `/api/` идут через nginx на адрес `NGINX_BACKEND_URL` из `.env`; для локального BFF укажите `http://bff:8000`. Проверка БД на отдельном временном томе: `make test-db`. Остановка с сохранением данных: `make down`.
 - [Запуск стенда и проверки](infra/README.md) — Docker Compose, тестовый Kubernetes, логи и проверка сохранности данных. Полная проверка backend в отдельном `kind`: `make test-kind` (по умолчанию удаляет только созданный им кластер).
 - [Архитектура](ARCHITECTURE.md) — границы MVP, ответственность сервисов и движение данных.
+- [IAM: гостевые сессии, вход editor/admin, ротация и отзыв](services/iam/README.md).
 - [BFF на Go: слои, запуск и тесты](services/bff/README.md#5-структура-backend).
 - [Проект REST API BFF](docs/bff-rest-api.md) — эндпоинты для фронтенда, форматы запросов и ответов. [OpenAPI v1 (черновик)](contracts/http/bff-v1.openapi.yaml). [Запуск и ограничения моков BFF](services/bff/README.md#7-mock-api-v1-для-фронтенда).
-- После запуска BFF откройте [Scalar API Reference](http://localhost:8000/scalar), чтобы посмотреть документацию `/api/v1`.
+- После запуска BFF откройте [Scalar API Reference](http://localhost:8080/scalar), чтобы посмотреть документацию `/api/v1`.
 - [Внутренние контракты](contracts/) — форматы команд, событий и gRPC-вызовов между сервисами.

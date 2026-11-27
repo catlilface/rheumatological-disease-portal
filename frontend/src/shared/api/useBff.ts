@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BffError, type Command } from './client'
 
 type RequestState<T> =
@@ -31,7 +31,8 @@ export function useBffQuery<T>(load: (signal: AbortSignal) => Promise<T>) {
     )
     return () => controller.abort()
   }, [load, attempt])
-  return { state, reload: () => setAttempt((value) => value + 1) }
+  const reload = useCallback(() => setAttempt((value) => value + 1), [])
+  return { state, reload }
 }
 
 export function useBffCommand<T>() {
@@ -47,11 +48,11 @@ export function useBffCommand<T>() {
     [],
   )
 
-  async function run(task: Command<T>) {
+  async function run(task: Command<T>, remember = true) {
     if (active.current) return
     const controller = new AbortController()
     active.current = controller
-    last.current = task
+    last.current = remember ? task : null
     setState({ status: 'loading' })
     try {
       const data = await task(controller.signal, () => {

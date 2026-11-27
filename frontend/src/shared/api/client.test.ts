@@ -62,6 +62,35 @@ describe('BFF client', () => {
     expect(new Headers(posts[0][1]?.headers).get('X-Portal-Request')).toBe('1')
   })
 
+  it('keeps the form session on a medication write and its retry after refresh', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(Response.json({}))
+      .mockResolvedValueOnce(receipt())
+      .mockResolvedValueOnce(status('succeeded'))
+    const api = createBffClient(fetcher)
+    await api.addMedication(
+      'original-session',
+      'medicine',
+      'dose',
+      '09:00',
+      '2026-01-01',
+    )(signal, pending)
+    for (const index of [0, 3, 4]) {
+      expect(
+        new Headers(fetcher.mock.calls[index][1]?.headers).get(
+          'X-Portal-Session',
+        ),
+      ).toBe('original-session')
+    }
+  })
+
   it('polls pending operations and retries polling without resending an accepted command', async () => {
     vi.useFakeTimers()
     const fetcher = vi
@@ -113,13 +142,42 @@ describe('BFF client', () => {
   it('surfaces a private resource denial without creating a session', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(
+      .mockImplementation(async () =>
         Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 }),
       )
     await expect(
       createBffClient(fetcher).screening(operationId, signal),
     ).rejects.toMatchObject({ code: 'SESSION_REQUIRED', status: 401 })
-    expect(fetcher).toHaveBeenCalledTimes(1)
+    expect(fetcher.mock.calls.map(([p]) => p)).toEqual([
+      '/api/v1/screenings/' + operationId,
+      '/api/v1/auth/session',
+      '/api/v1/auth/session/refresh',
+    ])
+  })
+
+  it('rotates only once for concurrent expired requests, without creating a guest', async () => {
+    let valid = false
+    const fetcher = vi.fn<typeof fetch>(async (path) => {
+      if (path === '/api/v1/auth/session/refresh') {
+        valid = true
+        return Response.json({})
+      }
+      return valid
+        ? Response.json({ roles: ['patient'] })
+        : Response.json({ code: 'SESSION_REQUIRED' }, { status: 401 })
+    })
+    const api = createBffClient(fetcher)
+    const replies = await Promise.all([
+      api.ensureSession()(signal, pending),
+      api.ensureSession()(signal, pending),
+    ])
+    expect(replies.map((v) => v.roles)).toEqual([['patient'], ['patient']])
+    expect(
+      fetcher.mock.calls.filter(([p]) => p === '/api/v1/auth/session/refresh'),
+    ).toHaveLength(1)
+    expect(
+      fetcher.mock.calls.some(([p]) => p === '/api/v1/auth/guest-sessions'),
+    ).toBe(false)
   })
 
   it('blocks a receipt that would send a browser request outside the BFF', async () => {

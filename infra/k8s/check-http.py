@@ -1,4 +1,5 @@
-"""Exercise the v1 browser contract over a loopback Kubernetes port-forward (stdlib only)."""
+"""Exercise the v1 browser contract over loopback (stdlib only)."""
+import argparse
 import json
 import sys
 from http.client import HTTPConnection
@@ -6,7 +7,11 @@ from http.cookies import SimpleCookie
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-origin = sys.argv[1].rstrip('/')
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('origin')
+parser.add_argument('--via-frontend', action='store_true', help='Test only routes exposed by the frontend proxy')
+args = parser.parse_args()
+origin = args.origin.rstrip('/')
 url = urlsplit(origin)
 # The cluster port-forward uses HTTP. Only replay this probe's own synthetic
 # guest cookie over loopback; real browsers still require Secure cookies and TLS.
@@ -17,12 +22,15 @@ base = '/api/v1'
 session = SimpleCookie()
 
 
-def request(path, *, method='GET', data=None, status=200):
+def request(path, *, method='GET', data=None, status=200, extra=None):
     headers = {}
-    if method == 'POST':
+    if method in ('POST', 'DELETE'):
         headers.update({'Origin': origin, 'X-Portal-Request': '1', 'Idempotency-Key': str(uuid4())})
     if session:
         headers['Cookie'] = 'portal_session=' + session['portal_session'].value
+    if path.startswith(base + '/auth/session') and 'portal_refresh' in session:
+        headers['Cookie'] += '; portal_refresh=' + session['portal_refresh'].value
+    headers.update(extra or {})
     if data is not None:
         headers['Content-Type'] = 'application/json'
     conn.request(method, path, body=json.dumps(data).encode() if data is not None else None, headers=headers)
@@ -45,7 +53,9 @@ def command(path, data):
     return {r['resource_type']: r['resource_id'] for r in op['resources']}
 
 
-assert get('/health') == {'status': 'ok'}
+# /health is private to the BFF; Compose checks it before the frontend probe runs.
+if not args.via_frontend:
+    assert get('/health') == {'status': 'ok'}
 survey = get(base + '/surveys/rheuma_screening_v1')
 assert any(q['code'] == 'В1' for b in survey['blocks'] for q in b['questions'])
 headers, _ = request(base + '/auth/guest-sessions', method='POST', status=201)
@@ -68,5 +78,29 @@ assert headers['Content-Type'] == 'application/pdf' and pdf.startswith(b'%PDF-')
 articles = base + '/knowledge-base/articles'
 slug = get(articles)['items'][0]['slug']
 assert get(articles + '/' + slug)['body_markdown']
+# Identity lives in the cookie, not in a URL, JSON, or an arbitrary header.
+auth = base + '/auth/session'
+victim = session['portal_session'].value
+session.clear()
+request(auth, status=401, extra={'X-User-ID': sid})
+headers, body = request(base + '/auth/guest-sessions', method='POST', data={'ownerSubjectId': sid}, status=201)
+assert json.loads(body)['kind'] == 'guest' and b'token' not in body
+for item in headers.get_all('Set-Cookie'):
+    session.load(item)
+request(report['download_url'], status=404, extra={'X-User-ID': sid})
+old_refresh = session['portal_refresh'].value
+key = {'Idempotency-Key': str(uuid4())}
+headers, _ = request(auth + '/refresh', method='POST', extra=key)
+for item in headers.get_all('Set-Cookie'):
+    session.load(item)
+assert session['portal_refresh'].value != old_refresh
+assert get(auth)['roles'] == []
+request(auth + '/refresh', method='POST', status=401, extra={**key, 'Cookie': 'portal_refresh=' + old_refresh})
+request(auth, status=401)  # replay also invalidated the winner's access and refresh
+request(auth + '/refresh', method='POST', status=401)
+request(report['download_url'], extra={'Cookie': 'portal_session=' + victim})
+headers, _ = request(auth, method='DELETE', status=204, extra={'Cookie': 'portal_session=' + victim})
+assert len(headers.get_all('Set-Cookie')) == 2
+request(report['download_url'], status=401, extra={'Cookie': 'portal_session=' + victim})
 conn.close()
-print('OK: BFF v1 guest screening, Unicode answer, versioned result, report PDF and content')
+print('OK: guest screening/PDF, owner isolation, refresh replay and immediate logout')

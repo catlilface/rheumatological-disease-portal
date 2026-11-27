@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"context"
+	"time"
+
 	"portal/bff/internal/models"
 	"portal/bff/internal/service"
 	"portal/bff/pkg/idempotency"
@@ -9,20 +12,25 @@ import (
 // Inbound ports are defined by the adapter that consumes them. In particular,
 // an HTTP handler gets session and command use cases, not their repositories.
 type Identity interface {
-	Session(cookie string) (*service.Login, error)
-	Guest(key, cookie string) (*service.Login, error)
-	Register(key, email, password string, consent service.MedicalConsent) (*service.Login, error)
-	SignIn(email, password string) (*service.Login, error)
-	Rotate(refresh, key string) (*service.Login, error)
-	Revoke(*service.Login)
+	Session(ctx context.Context, cookie string) (*service.Login, error)
+	Guest(ctx context.Context, key, cookie string) (*service.Login, error)
+	Register(ctx context.Context, key, access, email, password string, consent service.MedicalConsent) (*service.Login, error)
+	SignIn(ctx context.Context, email, password string) (*service.Login, error)
+	Rotate(ctx context.Context, refresh, key string) (*service.Login, error)
+	Revoke(ctx context.Context, access string) error
+	SetRole(ctx context.Context, access, email, role string) error
+	WithdrawConsent(ctx context.Context, access string) error
+	Check(ctx context.Context, login *service.Login, action string, resource models.Resource, owner string) (time.Time, error)
 }
 
 type Operations interface {
+	RunCabinet(*models.Actor, string, idempotency.Fingerprint, service.Cabinets, func(service.PatientCabinet) ([]models.Resource, error)) (service.OperationKey, error)
 	Run(actor, owner, key string, fingerprint idempotency.Fingerprint, apply func() ([]models.Resource, error)) (service.OperationKey, error)
 	Get(*models.Actor, string, string) (models.Operation, error)
 }
 
 type Screenings interface {
+	History(string, models.Window) (models.Page[models.Result], error)
 	Survey(id string, weightsVersion *string) (models.Survey, error)
 	Start(string, service.Start) ([]models.Resource, error)
 	Get(service.OwnedID) (*models.Session, error)

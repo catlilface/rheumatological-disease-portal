@@ -34,6 +34,10 @@ secret() {
 }
 config() { "${k[@]}" create configmap "$@" --dry-run=client -o yaml | "${k[@]}" apply -f -; }
 secret postgres-password --from-file="password=$MIS_SECRET_DIR/postgres-password"
+secret iam-key --from-file="iam-key=$MIS_SECRET_DIR/iam-key"
+for name in iam bff screening; do
+  secret "portal-tls-v2-$name" --from-file="$MIS_SECRET_DIR/portal-tls-v2/$name"
+done
 bootstrap=(); migrators=()
 for owner in iam screening content reporting files ai; do
   secret "db-app-$owner" --from-file="password=$MIS_SECRET_DIR/db/apps/$owner"

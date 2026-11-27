@@ -14,6 +14,8 @@ secret() {
     [ -s "$1" ] || { echo "Empty secret: $1" >&2; exit 1; }
 }
 secret "$root/postgres-password" 600
+secret "$root/iam-key" 444
+sh infra/db/prepare-iam.sh
 for owner in iam screening content reporting files ai ${MIS_BFF_DB:+bff}; do
     secret "$root/db/apps/$owner" 444
     secret "$root/db/migrators/$owner" 600

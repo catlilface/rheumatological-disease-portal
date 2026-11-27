@@ -14,8 +14,11 @@ import type {
   Start,
   Survey,
 } from './contracts'
+import { notifySessionChange } from './sessionChange'
 
 const prefix = '/api/v1'
+const sessionHeaders = (session?: string): Record<string, string> =>
+  session ? { 'X-Portal-Session': session } : {}
 const segment = encodeURIComponent
 const resultPath = ({ result_id, version }: ResultRef) =>
   '/results/' + segment(result_id) + '/versions/' + segment(String(version))
@@ -75,11 +78,7 @@ function wait(ms: number, signal: AbortSignal) {
 export function createBffClient(
   fetcher: typeof fetch = (...args) => fetch(...args),
 ) {
-  async function request(
-    path: string,
-    signal: AbortSignal,
-    init?: RequestInit,
-  ) {
+  async function send(path: string, signal: AbortSignal, init?: RequestInit) {
     const url = bffPath(path)
     let response: Response
     try {
@@ -96,12 +95,60 @@ export function createBffClient(
     }
     if (!response.ok) {
       const body = await response.json().catch(() => null)
+      if (body?.code === 'SESSION_CHANGED') notifySessionChange()
       throw new BffError(
         typeof body?.code === 'string' ? body.code : 'HTTP_ERROR',
         response.status,
       )
     }
     return response
+  }
+
+  let refreshing: Promise<void> | undefined
+  let generation = 0
+  const expired = (e: unknown) =>
+    e instanceof BffError && e.status === 401 && e.code === 'SESSION_REQUIRED'
+
+  async function recover() {
+    // A second tab may already have rotated the shared HttpOnly cookies.
+    const signal = AbortSignal.timeout(30_000)
+    try {
+      await send(prefix + '/auth/session', signal)
+    } catch (e) {
+      if (!expired(e)) throw e
+      const refresh = post(
+        '/auth/session/refresh',
+        undefined,
+        crypto.randomUUID(),
+      )
+      await send(refresh.path, signal, refresh.init)
+    }
+    generation++
+  }
+
+  async function request(
+    path: string,
+    signal: AbortSignal,
+    init?: RequestInit,
+  ) {
+    const before = generation
+    try {
+      return await send(path, signal, init)
+    } catch (e) {
+      if (!expired(e) || path === prefix + '/auth/guest-sessions') throw e
+      if (before === generation) {
+        refreshing ??= (
+          globalThis.navigator?.locks
+            ? navigator.locks.request('portal-session-refresh', recover)
+            : recover()
+        ).finally(() => {
+          refreshing = undefined
+        })
+        await refreshing
+      }
+      signal.throwIfAborted()
+      return send(path, signal, init)
+    }
   }
 
   async function json<T>(response: Response): Promise<T> {
@@ -112,16 +159,21 @@ export function createBffClient(
     }
   }
 
-  const get = async <T>(path: string, signal: AbortSignal) =>
-    json<T>(await request(prefix + path, signal))
+  const get = async <T>(path: string, signal: AbortSignal, session?: string) =>
+    json<T>(
+      await request(prefix + path, signal, {
+        headers: sessionHeaders(session),
+      }),
+    )
 
-  function post(path: string, body?: object, key?: string) {
+  function post(path: string, body?: object, key?: string, session?: string) {
     return {
       path: prefix + path,
       init: {
         method: 'POST',
         headers: {
           'X-Portal-Request': '1',
+          ...sessionHeaders(session),
           ...(body && { 'Content-Type': 'application/json' }),
           ...(key && { 'Idempotency-Key': key }),
         },
@@ -130,8 +182,14 @@ export function createBffClient(
     }
   }
 
-  function command(path: string, body?: object): Command<Operation> {
-    const { path: url, init } = post(path, body, crypto.randomUUID())
+  function command(
+    path: string,
+    body?: object,
+    method = 'POST',
+    session?: string,
+  ): Command<Operation> {
+    const { path: url, init } = post(path, body, crypto.randomUUID(), session)
+    init.method = method
     let accepted: { receipt: Receipt; delay: number } | undefined
     return async (signal, onPending) => {
       if (!accepted) {
@@ -152,7 +210,9 @@ export function createBffClient(
       for (let attempt = 0; attempt < 30; attempt += 1) {
         if (delay) await wait(Math.min(delay, 15_000), signal)
         const operation = await json<Operation>(
-          await request(statusUrl, signal),
+          await request(statusUrl, signal, {
+            headers: sessionHeaders(session),
+          }),
         )
         if (operation.operation_id !== receipt.operation_id)
           throw new BffError('INVALID_RESPONSE')
@@ -190,13 +250,78 @@ export function createBffClient(
       } catch (error) {
         if (!(error instanceof BffError) || error.code !== 'SESSION_REQUIRED')
           throw error
-        return json<Principal>(await request(path, signal, init))
+        const principal = await json<Principal>(
+          await request(path, signal, init),
+        )
+        notifySessionChange(true)
+        return principal
       }
     }
   }
 
   return {
     ensureSession,
+    principal: (signal: AbortSignal) => get<Principal>('/auth/session', signal),
+    async signIn(email: string, password: string, signal: AbortSignal) {
+      const { path, init } = post('/auth/session', { email, password })
+      const principal = await json<Principal>(await send(path, signal, init))
+      notifySessionChange(true)
+      return principal
+    },
+    async signOut(session: string, signal: AbortSignal) {
+      await request(prefix + '/auth/session', signal, {
+        method: 'DELETE',
+        headers: { 'X-Portal-Request': '1', ...sessionHeaders(session) },
+      })
+      notifySessionChange(true)
+    },
+    finishProfile: (
+      session: string,
+      name: string,
+      diagnosis: string | null,
+      reminders: { enabled: boolean; timezone: string; channels: string[] },
+    ) =>
+      command(
+        '/me/onboarding',
+        { name, diagnosis, reminders, medications: [] },
+        'PUT',
+        session,
+      ),
+    addMedication: (
+      session: string,
+      name: string,
+      dose_text: string,
+      time: string,
+      starts_on: string,
+    ) =>
+      command(
+        '/me/medications',
+        {
+          name,
+          dose_text,
+          local_times: [time],
+          starts_on,
+        },
+        'POST',
+        session,
+      ),
+    profile: (session: string, signal: AbortSignal) =>
+      get<{
+        name?: string
+        completed: boolean
+        reminders: { enabled: boolean; timezone: string; channels: string[] }
+        diagnosis: string | null
+        medications: {
+          medication_id: string
+          regimen: { name: string; dose_text: string }
+        }[]
+      }>('/me/onboarding', signal, session),
+    history: (session: string, offset: number, signal: AbortSignal) =>
+      get<{ items: Result[]; total: number; limit: number }>(
+        '/me/screening-results?offset=' + offset,
+        signal,
+        session,
+      ),
     survey: (
       signal: AbortSignal,
       id = 'rheuma_screening_v1',

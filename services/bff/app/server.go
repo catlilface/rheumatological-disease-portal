@@ -12,9 +12,28 @@ import (
 	"syscall"
 
 	"portal/bff/cmd/config"
+	"portal/bff/internal/repo/archive"
+	"portal/bff/internal/repo/iam"
 )
 
 func Run(args []string) error {
+	return run(args, production)
+}
+
+func production(config.Settings) (dependencies, error) {
+	auth, err := iam.Dial("iam:50051", "/run/iam-tls")
+	if err != nil {
+		return dependencies{}, err
+	}
+	path := os.Getenv("PORTAL_ARCHIVE_PATH")
+	if path == "" {
+		path = "/var/lib/portal/patients.db"
+	}
+	db, err := archive.Open(path)
+	return dependencies{auth: auth, archive: db}, err
+}
+
+func run(args []string, open func(config.Settings) (dependencies, error)) error {
 	flags := flag.NewFlagSet("bff", flag.ContinueOnError)
 	addr := flags.String("addr", "", "listen address (defaults to BFF_HTTP_ADDR)")
 	cert := flags.String("tls-cert", "", "PEM certificate for direct HTTPS (otherwise terminate TLS at ingress)")
@@ -38,16 +57,22 @@ func Run(args []string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	var delivery *deliveryRuntime
+	deps, err := open(cfg)
+	if err != nil {
+		return err
+	}
+	if deps.archive != nil {
+		defer deps.archive.Close()
+	}
 	if cfg.Delivery.Enabled {
 		var stop func()
-		delivery, stop, err = startDelivery(ctx, cfg.Delivery)
+		deps.delivery, stop, err = startDelivery(ctx, cfg.Delivery)
 		if err != nil {
 			return err
 		}
 		defer stop()
 	}
-	handler, err := build(root, cfg, delivery)
+	handler, err := build(root, cfg, deps)
 	if err != nil {
 		return err
 	}

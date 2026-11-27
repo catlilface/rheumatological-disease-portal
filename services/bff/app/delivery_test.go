@@ -40,7 +40,7 @@ func TestDeliveryHTTPRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(stop)
-		api, err := build(root, cfg, runtime)
+		api, err := build(root, cfg, dependencies{auth: testPatient{}, delivery: runtime})
 		if err != nil {
 			t.Fatal(err)
 		}

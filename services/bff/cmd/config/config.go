@@ -74,7 +74,7 @@ func Defaults() Settings {
 		Demo: Demo{
 			ModeratorEmail:    "moderator@example.test",
 			ExplanationSource: "rheumatoid-arthritis",
-			SessionTTL:        24 * time.Hour,
+			SessionTTL:        30 * 24 * time.Hour,
 			ReportShareTTL:    24 * time.Hour,
 		},
 	}

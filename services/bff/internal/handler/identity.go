@@ -30,12 +30,7 @@ func (x credentials) Validate() error {
 }
 
 func principal(l *service.Login) models.Principal {
-	roles := map[string][]string{
-		models.GuestActor:  {},
-		models.StaffActor:  {"moderator"},
-		models.MemberActor: {"patient"},
-	}
-	return models.Principal{Kind: l.Actor.Kind, Roles: roles[l.Actor.Kind], SessionExpiresAt: l.Expires}
+	return models.Principal{Kind: l.Actor.Kind, Roles: l.Roles, SessionID: l.SessionID, SessionExpiresAt: l.Expires}
 }
 
 func sessionCookies(c *call, l *service.Login) {
@@ -47,9 +42,10 @@ func sessionCookies(c *call, l *service.Login) {
 			cookie.SameSite = http.SameSiteStrictMode
 		}
 		if l != nil {
-			cookie.Expires = l.Expires
+			cookie.Expires = l.AccessExpires
 			cookie.Value = l.Access
 			if refresh {
+				cookie.Expires = l.Expires
 				cookie.Value = l.Refresh
 			}
 		} else {
@@ -78,31 +74,40 @@ func (a *API) identity() {
 		}, nil
 	})
 	a.on(opCreateGuestSession, public, func(c *call) (any, error) {
-		l, e := a.auth.Guest(c.id(idempotencyHeader), c.accessCookie)
+		l, e := a.auth.Guest(c.ctx, c.id(idempotencyHeader), c.accessCookie)
 		return c.issue(http.StatusCreated, l, e)
 	})
 	a.on(opRegisterPatient, public, bind(func(c *call, x credentials) (any, error) {
-		l, e := a.auth.Register(c.id(idempotencyHeader), x.Email, x.Password, x.Consent)
+		l, e := a.auth.Register(c.ctx, c.id(idempotencyHeader), c.accessCookie, x.Email, x.Password, x.Consent)
 		return c.issue(http.StatusCreated, l, e)
 	}))
+	a.on(opSetAccountRole, current, bind(func(c *call, x struct{ Email, Role string }) (any, error) {
+		if err := a.auth.SetRole(c.ctx, c.accessCookie, x.Email, x.Role); err != nil {
+			return nil, err
+		}
+		c.status = http.StatusNoContent
+		return nil, nil
+	}))
 	a.on(opSignIn, public, bind(func(c *call, x credentials) (any, error) {
-		l, e := a.auth.SignIn(x.Email, x.Password)
+		l, e := a.auth.SignIn(c.ctx, x.Email, x.Password)
 		return c.issue(http.StatusOK, l, e)
 	}))
 	a.on(opGetPrincipal, current, func(c *call) (any, error) { return principal(c.login), nil })
 	a.on(opRefreshSession, public, func(c *call) (any, error) {
-		l, e := a.auth.Rotate(c.refreshCookie, c.id(idempotencyHeader))
+		l, e := a.auth.Rotate(c.ctx, c.refreshCookie, c.id(idempotencyHeader))
 		return c.issue(http.StatusOK, l, e)
 	})
 	a.on(opSignOut, current, func(c *call) (any, error) {
-		a.auth.Revoke(c.login)
+		if err := a.auth.Revoke(c.ctx, c.accessCookie); err != nil {
+			return nil, err
+		}
 		sessionCookies(c, nil)
 		c.status = http.StatusNoContent
 		return nil, nil
 	})
 	a.on(opWithdrawMedicalConsent, registered, func(c *call) (any, error) {
 		c.status = http.StatusNoContent
-		return nil, c.actor.WithdrawConsent()
+		return nil, a.auth.WithdrawConsent(c.ctx, c.accessCookie)
 	})
 	a.on(opGetOperation, current, func(c *call) (any, error) { return a.commands.Get(c.actor, c.id("owner"), c.id("operation_id")) })
 }

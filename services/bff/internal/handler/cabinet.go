@@ -12,13 +12,11 @@ func (c *call) period() models.Period {
 }
 
 func cabinetCommand[T any](a *API, s service.Cabinets, id string, apply func(patient, *call, T) ([]models.Resource, error)) {
-	command(a, id, member, service.OwnerCabinet, func(c *call, x T) ([]models.Resource, error) {
-		p, err := s.For(c.actor)
-		if err != nil {
-			return nil, err
-		}
-		return apply(p, c, x)
-	})
+	a.on(id, member, bind(func(c *call, x T) (any, error) {
+		return c.receipt(a.commands.RunCabinet(c.actor, c.id(idempotencyHeader), c.fingerprint, s, func(p patient) ([]models.Resource, error) {
+			return apply(p, c, x)
+		}))
+	}))
 }
 
 func (a *API) Cabinet(s service.Cabinets) {

@@ -10,12 +10,20 @@ spec:
   - name: client
     port: 8000
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: patient-archive}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 1Gi}}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: bff
 spec:
   replicas: 1
+  strategy: {type: Recreate}
   selector:
     matchLabels: &1
       app: bff
@@ -24,11 +32,15 @@ spec:
       labels: *1
     spec:
       automountServiceAccountToken: false
+      securityContext: {fsGroup: 10001}
       containers:
       - name: bff
         image: rdp-bff:mvp
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - {name: archive, mountPath: /var/lib/portal}
+        - {name: tls, mountPath: /run/iam-tls, readOnly: true}
         readinessProbe:
           httpGet:
             port: 8000
@@ -38,6 +50,11 @@ spec:
               value: localhost
           periodSeconds: 10
           timeoutSeconds: 8
+      volumes:
+      - name: archive
+        persistentVolumeClaim: {claimName: patient-archive}
+      - name: tls
+        secret: {secretName: portal-tls-v2-bff}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

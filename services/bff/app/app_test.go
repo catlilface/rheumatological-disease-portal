@@ -18,7 +18,7 @@ func TestConcurrentIntentAppliesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api, err := Build(root, config.Defaults())
+	api, err := buildDemo(root, config.Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}

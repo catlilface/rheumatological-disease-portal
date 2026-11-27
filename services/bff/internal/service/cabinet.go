@@ -5,6 +5,9 @@ import "portal/bff/internal/models"
 type Cabinets struct {
 	Runtime
 	Records Store[string, *models.Cabinet]
+	Archive interface {
+		Cabinet(string) (*models.Cabinet, error)
+	}
 }
 
 // PatientCabinet is an owner-scoped use case, valid within one unit of work.
@@ -17,6 +20,10 @@ type PatientCabinet struct {
 func (s Cabinets) For(a *models.Actor) (PatientCabinet, error) {
 	if err := a.RequirePatient(); err != nil {
 		return PatientCabinet{}, err
+	}
+	if s.Archive != nil {
+		c, err := s.Archive.Cabinet(a.ID)
+		return PatientCabinet{c, s.Runtime}, err
 	}
 	c, ok := s.Records.Get(a.ID)
 	if !ok {

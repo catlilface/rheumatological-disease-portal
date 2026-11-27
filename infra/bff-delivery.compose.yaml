@@ -1,7 +1,12 @@
 services:
-  bff:
+  frontend:
+    # Keep the unauthenticated delivery demo on loopback, behind nginx.
     ports: !override
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8080:80"
+    environment:
+      NGINX_BACKEND_URL: http://bff:8000
+
+  bff:
     networks: [edge, rpc, databases, broker]
     environment:
       BFF_DELIVERY_ENABLED: "true"

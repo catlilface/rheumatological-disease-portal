@@ -2,30 +2,39 @@ syntax = "proto3";
 
 package rheuma.iam.grpc.v1;
 
+option go_package = "portal/bff/internal/gen/iamv1";
+
 import "contracts/common/v1/metadata.proto";
+import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
 // Token issuance/refresh are the intentional exception to Kafka-only writes.
 // These calls require authenticated service transport. Never log token payloads.
 service IamService {
   rpc CreateGuestSession(CreateGuestSessionRequest) returns (TokenPair);
-  // Initial login for provisioned admins/medical reviewers, not registration.
+  // Password login for registered accounts (legacy RPC name).
+  rpc RegisterPatient(RegisterPatientRequest) returns (TokenPair);
+  rpc SetRole(SetRoleRequest) returns (google.protobuf.Empty);
+  rpc WithdrawMedicalConsent(AuthenticateRequest) returns (google.protobuf.Empty);
   rpc SignInStaff(SignInStaffRequest) returns (TokenPair);
   rpc RefreshTokens(RefreshTokensRequest) returns (TokenPair);
   rpc Authenticate(AuthenticateRequest) returns (Principal);
   rpc CheckAccess(CheckAccessRequest) returns (AccessDecision);
+  // Revokes this session family before returning success.
+  rpc EndSession(AuthenticateRequest) returns (google.protobuf.Empty);
 }
 
 enum UserRole {
   USER_ROLE_UNSPECIFIED = 0;
   USER_ROLE_PATIENT = 1;
   USER_ROLE_ADMIN = 2;
-  USER_ROLE_MEDICAL_REVIEWER = 3;
+  USER_ROLE_EDITOR = 3;
 }
 
 message CreateGuestSessionRequest {
-  // Stable across transport retries; IAM must not create duplicate sessions.
+  // Stable across retries. A key alone is not a credential.
   string request_id = 1;
+  string access_token = 2; // Required on a retry: proof of the existing guest session.
 }
 
 // Only over confidential, service-authenticated transport. IAM looks up the
@@ -38,6 +47,18 @@ message SignInStaffRequest {
   string password = 3;
 }
 
+message RegisterPatientRequest {
+  string request_id = 1;
+  string email = 2;
+  string password = 3;
+  string consent_version = 4;
+  string guest_access_token = 5; // Optional proof to retain this guest's own history.
+}
+message SetRoleRequest {
+  string access_token = 1;
+  string email = 2;
+  UserRole role = 3;
+}
 message RefreshTokensRequest {
   string request_id = 1;
   string refresh_token = 2;
@@ -62,6 +83,7 @@ message Principal {
   bool is_guest = 2;
   repeated UserRole roles = 3;
   google.protobuf.Timestamp session_expires_at = 4;
+  bool has_medical_consent = 5;
 }
 
 message CheckAccessRequest {
@@ -71,6 +93,7 @@ message CheckAccessRequest {
   rheuma.common.v1.ResourceReference resource = 3;
   // Resolved by the trusted resource owner, never accepted from the browser.
   string resource_owner_subject_id = 4;
+  string access_token = 5; // Current browser credential; identifiers alone never authorize reads.
 }
 
 message AccessDecision {
@@ -79,4 +102,6 @@ message AccessDecision {
   bool allowed = 2;
   string reason_code = 3;
   google.protobuf.Timestamp evaluated_at = 4;
+  // Single-call decision, bound to the authenticated caller and request. Not a bearer grant.
+  google.protobuf.Timestamp expires_at = 5;
 }

@@ -88,13 +88,13 @@ BFF — отдельный Go-модуль. Три слоя внутри `intern
 | `internal/handler/` | Привязка методов к `operationId` контракта v1, валидация HTTP, cookie, CORS, перевод ошибок и выдача PDF. |
 | `internal/handler/middleware/` | Проверка Host, CORS и журнал HTTP-запросов. |
 | `cmd/config/` | Значения по умолчанию и настройки из окружения и `.env`. |
-| `internal/repo/` | Хранилище в памяти, блокировка транзакций и встроенные материалы, анкета и PDF. |
+| `internal/repo/` | gRPC-клиент IAM, архив кабинетов и результатов (bbolt), хранилище в памяти и встроенные материалы. |
 | `pkg/` | Переиспользуемые пакеты для паролей, токенов и отпечатка идемпотентного запроса. |
 | `app/` | Сборка зависимостей и жизненный цикл HTTP-сервера. |
 | `cmd/server/` | Точка входа процесса BFF. |
 | `tests/` | Независимый тестовый клиент: поднимает Go-процесс с TLS и проверяет ответы по контракту. Python не нужен для запуска BFF и не входит в его образ. |
 
-Для однопроцессного мока операция с агрегатом и запись её результата выполняются в одной критической секции. Поэтому конкурентные повторы команды не применяются дважды. При переходе к постоянному хранилищу эту гарантию должен обеспечить новый адаптер; одного mutex для нескольких реплик недостаточно.
+В рабочем BFF изменение кабинета, результат операции и квитанция идемпотентности записываются в одной транзакции bbolt на томе `patient_archive`. Повтор запроса после перезапуска возвращает прежнюю операцию. В контрактных тестах хранилище в памяти использует одну критическую секцию.
 
 ## 6. Запуск и проверка BFF
 
@@ -104,10 +104,9 @@ BFF — отдельный Go-модуль. Три слоя внутри `intern
 cd services/bff
 go test -race ./...
 go vet ./...
-go run ./cmd/server -addr :8000
 ```
 
-Версия Go указана в `go.mod`. Готовность: `curl http://localhost:8000/health`.
+Версия Go указана в `go.mod`. Для запуска BFF вместе с IAM и PostgreSQL выполните `make up` из корня репозитория. Порт BFF не публикуется; готовность можно проверить командой `docker compose exec bff wget -qO- http://127.0.0.1:8000/health`.
 
 | Переменная | По умолчанию |
 |---|---|
@@ -115,10 +114,10 @@ go run ./cmd/server -addr :8000
 | `BFF_HTTP_READ_HEADER_TIMEOUT`, `BFF_HTTP_READ_TIMEOUT` | `5s`, `15s` |
 | `BFF_HTTP_WRITE_TIMEOUT`, `BFF_HTTP_IDLE_TIMEOUT`, `BFF_HTTP_SHUTDOWN_TIMEOUT` | `30s`, `1m`, `10s` |
 | `BFF_HTTP_MAX_BODY_BYTES` | `1048576` |
-| `MOCK_SESSION_TTL`, `MOCK_REPORT_SHARE_TTL` | `24h`, `24h` |
+| `MOCK_SESSION_TTL`, `MOCK_REPORT_SHARE_TTL` | `720h`, `24h` (контрактные тесты) |
 | `MOCK_MODERATOR_EMAIL`, `MOCK_EXPLANATION_SOURCE` | `moderator@example.test`, `rheumatoid-arthritis` |
 
-После запуска откройте [Scalar API Reference](http://localhost:8000/scalar). Страница берёт актуальный контракт и связанные схемы с самого BFF (`/scalar/bff-v1.openapi.yaml`, `/scalar/schemas.yaml`); браузеру нужен доступ к `cdn.jsdelivr.net` для загрузки Scalar. Отдельный контейнер документации не требуется. Если HTTPS завершается на обратном прокси, сохраните внешний `Host` и добавьте к ответу `/scalar` заголовок `Content-Security-Policy: upgrade-insecure-requests`, чтобы браузер загрузил контракт по HTTPS.
+После запуска откройте [Scalar API Reference](http://localhost:8080/scalar). Браузер загружает контракт и связанные схемы по путям `/scalar/bff-v1.openapi.yaml` и `/scalar/schemas.yaml` с того же origin, в том числе за HTTPS-прокси. Для загрузки Scalar нужен доступ к `cdn.jsdelivr.net`; отдельный контейнер документации не требуется.
 
 На самом BFF `/docs`, `/redoc` и `/openapi.json` не публикуются. Исходный контракт: [OpenAPI v1](../../contracts/http/bff-v1.openapi.yaml). BFF ищет `contracts/http/` среди родительских каталогов и читает `.env` из корня репозитория; переменные окружения имеют приоритет. Dockerfile копирует контракты в образ.
 
@@ -129,12 +128,13 @@ expose-заголовок `Content-Disposition`. По умолчанию cross-o
 
 ## 7. Mock API v1 для фронтенда
 
-Все 55 операций [контракта фронтенда](../../docs/bff-rest-api.md) доступны под `/api/v1`. Стенд **только для синтетических данных**. БД, Kafka, IAM, LLM и почта не нужны. У каждого гостя и пациента свои данные в памяти процесса: используйте **одну реплику**; перезапуск сбрасывает все сеансы, результаты и ссылки.
+Этот раздел описывает изолированный бинарник **контрактных тестов** (`go test -c`), а не режим развернутого BFF. Рабочий процесс обязательно использует [gRPC IAM](../iam/README.md) на `iam:50051` и сертификаты `/run/iam-tls/`; переключателя на локальную идентичность нет. В рабочем режиме доступны регистрация пациента, кабинет и архив скринингов; форум и прочие демонстрационные маршруты не смонтированы. Права и требования к постоянному тому описаны в инструкции IAM. В тестовом бинарнике доступны все операции `/api/v1` без внешних сервисов. У каждого гостя и пациента свои данные в памяти процесса: используйте **одну реплику**; перезапуск сбрасывает все сеансы, результаты и ссылки.
 
 - Без входа: `GET /api/v1/surveys/rheuma_screening_v1`, `GET /api/v1/knowledge-base/articles`, `GET /api/v1/doctor-route` и чтение форума.
 - Для скрининга создайте гостя (`POST /api/v1/auth/guest-sessions`); для кабинета зарегистрируйте тестовый email и пароль с версией из `GET /api/v1/auth/medical-data-policy`. Для очереди модерации есть `moderator@example.test`: вход в эту роль **отключён**, пока перед запуском BFF не задан `MOCK_MODERATOR_PASSWORD` в окружении. Регистрацией получить роль нельзя.
 - Браузер работает с `HttpOnly; Secure` cookie: используйте HTTPS и `credentials: 'include'`. Для записи нужны доверенный `Origin` и `X-Portal-Request: 1`. Для операций с ответом `202`, а также создания гостя, регистрации и обновления сессии передавайте `Idempotency-Key: <UUID>`. Для повтора создания гостя ранее выданная cookie также обязательна: ключ повтора сам по себе не удостоверяет гостя.
-- При разных origin настройте `CORS__ALLOW_ORIGINS` (точный origin фронтенда), `CORS__ALLOW_CREDENTIALS=true`, методы `GET, POST, PUT, DELETE`, заголовки `Content-Type, X-Portal-Request, Idempotency-Key` и expose-заголовки `Location, Retry-After, Content-Disposition` (списки — JSON-массивы).
+- При открытии кабинета сохраните `session_id` из `GET /api/v1/auth/session` в состоянии формы. Для команд `/me/*` передавайте его в `X-Portal-Session`, в том числе при повторах. Это не токен: BFF проверяет cookie отдельно. Обычная ротация cookie сохраняет `session_id`; при `409 SESSION_CHANGED` отбросьте старый ввод и перечитайте кабинет.
+- При разных origin настройте `CORS__ALLOW_ORIGINS` (точный origin фронтенда), `CORS__ALLOW_CREDENTIALS=true`, методы `GET, POST, PUT, DELETE`, заголовки `Content-Type, X-Portal-Request, X-Portal-Session, Idempotency-Key` и expose-заголовки `Location, Retry-After, Content-Disposition` (списки — JSON-массивы).
 
 **Пример цепочки:** возьмите `survey_id`, `weights_version`, `disclaimer_version` из анкеты, передайте их с `disclaimer_accepted: true` в `POST /api/v1/screenings`. Прочитайте `status_url` из `202`; `resources` успешной операции содержит `resource_type: "screening"` и `resource_id` для `GET /api/v1/screenings/{screening_id}`. Версия этого прохождения идёт в `expected_session_version` следующего ответа. ID и версия результата используются и в пояснении, и при заказе PDF.
 
@@ -160,7 +160,8 @@ Consumer фиксирует offset после commit. При повторной 
 
 1. Из корня полного checkout репозитория запустите `make up-bff-delivery` с Docker Compose 2.24.4
    или новее. Команда создаёт `mis_bff` и запускает демонстрационный BFF,
-   PostgreSQL и Kafka. BFF доступен на `http://localhost:8000`.
+   IAM, PostgreSQL, Kafka и frontend. Запросы к `/_demo/delivery/` идут через nginx
+   на `http://127.0.0.1:8080`. Это единственный опубликованный порт демостенда.
 2. Откройте `requests.http` в GoLand или другом JetBrains IDE и выполняйте
    запросы по порядку. При ответе 404 от запроса результата повторите его
    после обработки команды. Запросы используют фиксированные синтетические
@@ -183,6 +184,6 @@ Consumer фиксирует offset после commit. При повторной 
 
 Демонстрационные маршруты работают при `BFF_DELIVERY_ENABLED=true`. Обычный
 `make up` сохраняет изоляцию BFF от Kafka и PostgreSQL. Существующие маршруты
-`/api/v1` продолжают использовать демонстрационные данные в памяти.
+`/api/v1` используют IAM и архив пациента независимо от режима доставки.
 Для интеграционных тестов с отдельными контейнерами запустите
 `make test-bff-delivery`.

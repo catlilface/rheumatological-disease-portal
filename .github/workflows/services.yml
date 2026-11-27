@@ -1,24 +1,28 @@
 name: Services CI
 
 on:
-  push:
-    branches: [main]
-    paths: &build-paths
+  workflow_call:
+  pull_request:
+    paths:
       - "services/**"
+      - "frontend/src/pages/cabinet/**"
+      - "frontend/src/shared/api/**"
+      - "frontend/tests/integration/patient.mjs"
       - "packages/service-runtime/**"
       - "contracts/**"
       - "infra/db/**"
       - "infra/bff-delivery.compose.yaml"
+      - "infra/tests/compose-ports.sh"
       - "infra/check-transport.sh"
+      - "infra/k8s/check-http.py"
       - "infra/smoke.sh"
       - "infra/k8s/kafka.env"
       - "compose.yaml"
+      - "deploy.yml"
       - ".env.example"
       - "Makefile"
       - ".dockerignore"
       - ".github/workflows/services.yml"
-  pull_request:
-    paths: *build-paths
 
 concurrency:
   group: services-${{ github.ref }}
@@ -43,7 +47,20 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Verify only the frontend port is published in each stack
+        run: bash infra/tests/compose-ports.sh
       - run: make up
+      - name: Verify IAM sessions against PostgreSQL and through the BFF
+        run: |
+          docker compose exec -T iam python -m unittest -v service.tests.test_policy service.tests.test_sessions service.tests.test_bff
+          docker compose run --rm --no-deps -v "$PWD/.secrets/portal-tls-v2/bff:/run/test-bff-tls:ro" screening python -m unittest -v service.tests.transport_e2e
+          python3 infra/k8s/check-http.py http://127.0.0.1:8080 --via-frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Patient journey in Chrome against the running portal
+        working-directory: frontend
+        run: npm ci && npm run test:patient-e2e
       - name: Check gRPC contracts, Kafka commands and BFF isolation
         run: bash infra/check-transport.sh compose
       - name: Check persistence after storage restart
@@ -62,7 +79,6 @@ jobs:
         service: [bff, ai, content, files, iam, reporting, screening]
     permissions:
       contents: read
-      packages: write
     env:
       SERVICE: ${{ matrix.service }}
     steps:
@@ -89,20 +105,10 @@ jobs:
         if: matrix.service == 'bff'
         run: docker build -f services/bff/Dockerfile -t "rheumatology-portal-$SERVICE:ci" .
 
-      # TODO: Добавить модульные тесты для ai, content, files, iam, reporting и screening
+      # TODO: Подключить проверки остальных доменных сервисов
       # по мере реализации. Пока собираем их образы на общем runtime, как в Compose.
       - name: Build service image
         if: matrix.service != 'bff'
         run: |
           docker build -f packages/service-runtime/Dockerfile --build-arg "SERVICE=$SERVICE" \
             -t "rheumatology-portal-$SERVICE:ci" .
-
-      - name: Publish image to GitHub Container Registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rheumatology-portal-$SERVICE:$GITHUB_SHA"
-          docker tag "rheumatology-portal-$SERVICE:ci" "$image"
-          docker push "$image"

@@ -43,10 +43,18 @@ func (s Reports) Create(a *models.Actor, x models.ReportRequest) ([]models.Resou
 	return []models.Resource{models.Ref("report", r.ID)}, nil
 }
 
-func (s Reports) Get(a *models.Actor, id string) (models.Report, error) {
-	r, ok := s.Records.Get(OwnedID{Owner: a.ID, ID: id})
+func (s Reports) Find(owner, id string) (models.Report, error) {
+	r, ok := s.Records.Get(OwnedID{Owner: owner, ID: id})
 	if !ok {
 		return r, models.NotFound()
+	}
+	return r, nil
+}
+
+func (s Reports) Get(a *models.Actor, id string) (models.Report, error) {
+	r, err := s.Find(a.ID, id)
+	if err != nil {
+		return r, err
 	}
 	return r, r.Accessible(a)
 }

@@ -14,6 +14,8 @@ func (c *call) result() models.ResultRef {
 }
 
 func (a *API) Screening(s Screenings) {
+	a.screenings = s
+	a.on(opListScreeningResults, member, func(c *call) (any, error) { return s.History(c.actor.ID, c.window) })
 	a.on(opGetSurvey, public, func(c *call) (any, error) { return s.Survey(c.id("survey_id"), c.optional("weights_version")) })
 	command(a, opStartScreening, current, service.OwnerScreening, func(c *call, x service.Start) ([]models.Resource, error) { return s.Start(c.actor.ID, x) })
 	a.on(opGetScreening, current, func(c *call) (any, error) { return s.Get(c.owned("screening_id")) })

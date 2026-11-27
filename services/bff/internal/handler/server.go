@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -22,16 +24,19 @@ import (
 )
 
 type API struct {
-	cfg      config.Settings
-	mux      *http.ServeMux
-	handler  http.Handler
-	pending  contract
-	tx       service.UnitOfWork
-	auth     Identity
-	commands Operations
+	cfg        config.Settings
+	mux        *http.ServeMux
+	handler    http.Handler
+	pending    contract
+	tx         service.UnitOfWork
+	auth       Identity
+	commands   Operations
+	screenings Screenings
+	reports    service.Reports
+	demo       bool // Only the contract-test binary enables in-memory identity and demo routes.
 }
 
-func New(cfg config.Settings, files fs.FS, tx service.UnitOfWork, auth Identity, commands Operations) (*API, error) {
+func New(cfg config.Settings, files fs.FS, tx service.UnitOfWork, auth Identity, commands Operations, demo bool) (*API, error) {
 	spec, err := loadContract(files)
 	if err != nil {
 		return nil, err
@@ -45,6 +50,7 @@ func New(cfg config.Settings, files fs.FS, tx service.UnitOfWork, auth Identity,
 		tx:       tx,
 		auth:     auth,
 		commands: commands,
+		demo:     demo,
 	}
 	a.mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -82,6 +88,8 @@ const (
 )
 
 type call struct {
+	ctx                         context.Context
+	validUntil                  time.Time
 	login                       *service.Login
 	actor                       *models.Actor
 	values                      map[string]string
@@ -117,6 +125,7 @@ var problemStatuses = map[models.Kind]int{
 	models.Unauthenticated: http.StatusUnauthorized,
 	models.Forbidden:       http.StatusForbidden,
 	models.Gone:            http.StatusGone,
+	models.Unavailable:     http.StatusServiceUnavailable,
 }
 
 func problem(w http.ResponseWriter, err error) {
@@ -271,15 +280,21 @@ func (a *API) prepare(w http.ResponseWriter, r *http.Request, e endpoint) (*call
 	return c, nil
 }
 
-func (a *API) authorize(c *call, level access) error {
+func (a *API) authorize(c *call, id string, level access) error {
 	if level == public {
 		return nil
 	}
-	l, err := a.auth.Session(c.accessCookie)
+	l, err := a.auth.Session(c.ctx, c.accessCookie)
 	if err != nil {
 		return err
 	}
+	if expected := c.id("X-Portal-Session"); expected != "" && expected != l.SessionID {
+		return models.Fail(models.Conflict, "SESSION_CHANGED")
+	}
 	c.login, c.actor = l, l.Actor
+	if !a.demo && mvpResources[id] != "" {
+		return a.checkResource(c, id)
+	}
 	if level >= registered {
 		if err := c.actor.RequireRegistered(); err != nil {
 			return err
@@ -300,19 +315,22 @@ func (a *API) on(id string, level access, h handler) {
 		panic("unknown or duplicate handler: " + id)
 	}
 	delete(a.pending, id)
+	resource, mounted := mvpResources[id]
+	if !a.demo && !mounted {
+		return
+	}
 	a.mux.HandleFunc(e.pattern, func(w http.ResponseWriter, r *http.Request) {
 		c, err := a.prepare(w, r, e)
 		if err != nil {
 			problem(w, err)
 			return
 		}
+		var cancel context.CancelFunc
+		c.ctx, cancel = context.WithTimeout(r.Context(), 4*time.Second)
+		defer cancel()
 		var data []byte
 		var contentType string
-		// Copy the response snapshot before releasing the transaction; never hold it during socket I/O.
-		a.tx.Within(func() {
-			if err = a.authorize(c, level); err != nil {
-				return
-			}
+		dispatch := func() {
 			var out any
 			out, err = h(c)
 			if err != nil {
@@ -328,7 +346,28 @@ func (a *API) on(id string, level access, h handler) {
 				contentType = "application/json"
 				data, err = json.Marshal(v)
 			}
-		})
+		}
+		if a.demo {
+			// The demo identity and fixture stores share mutable in-process state.
+			a.tx.Within(func() {
+				if err = a.authorize(c, id, level); err == nil {
+					dispatch()
+				}
+			})
+		} else if err = a.authorize(c, id, level); err == nil {
+			if resource == "" {
+				dispatch()
+			} else {
+				a.tx.Within(func() {
+					// Ownership is immutable; handlers re-read the same owner-scoped key.
+					if c.ctx.Err() != nil || !time.Now().Before(c.validUntil) {
+						err = models.Fail(models.Unavailable, "AUTHORIZATION_UNAVAILABLE")
+						return
+					}
+					dispatch()
+				})
+			}
+		}
 		if err != nil {
 			problem(w, err)
 			return
@@ -369,7 +408,10 @@ func command[T any](a *API, id string, level access, owner string, apply func(*c
 }
 
 func (a *API) accept(c *call, owner string, apply func() ([]models.Resource, error)) (any, error) {
-	key, err := a.commands.Run(c.actor.ID, owner, c.id(idempotencyHeader), c.fingerprint, apply)
+	return c.receipt(a.commands.Run(c.actor.ID, owner, c.id(idempotencyHeader), c.fingerprint, apply))
+}
+
+func (c *call) receipt(key service.OperationKey, err error) (any, error) {
 	if err != nil {
 		return nil, err
 	}

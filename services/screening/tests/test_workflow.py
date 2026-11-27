@@ -434,6 +434,13 @@ class MockTransportTests(unittest.IsolatedAsyncioTestCase):
             operation_request = metadata.GetOperationRequest(operation_id=message.metadata.operation_id)
             operation_request.context.request_id = "op"
             operation_request.context.actor.CopyFrom(message.metadata.actor)
+            with self.assertRaises(grpc.aio.AioRpcError) as unauthenticated:
+                await client.GetOperation(operation_request, timeout=5)
+            self.assertEqual(unauthenticated.exception.code(), grpc.StatusCode.UNAUTHENTICATED)
+            # Transport and IAM are exercised separately; isolate storage/ownership here.
+            verified = patch('services.screening.main.principal_for', AsyncMock(return_value=message.metadata.actor))
+            verified.start()
+            self.addCleanup(verified.stop)
             operation = await client.GetOperation(operation_request, timeout=5)
             session_id = operation.resources[0].resource_id
 

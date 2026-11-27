@@ -16,12 +16,19 @@ for endpoint in postgres:5432 qdrant:6333 seaweedfs:8888 kafka:19092; do
     fi
 done
 SH
-run files python - <<'PY'
+# Even a client that trusts the correct CA cannot call IAM without the BFF certificate.
+run iam python - <<'PY'
+from pathlib import Path
 import grpc
 from contracts.grpc.v1 import iam_pb2 as p, iam_pb2_grpc as g
-with grpc.insecure_channel('iam:50051') as channel:
-    decision=g.IamServiceStub(channel).CheckAccess(p.CheckAccessRequest(), timeout=5)
-    assert not decision.allowed and decision.reason_code=='ACCESS_DENIED'
+creds = grpc.ssl_channel_credentials(Path('/run/iam-tls/ca.crt').read_bytes())
+with grpc.secure_channel('localhost:50051', creds, options=[('grpc.ssl_target_name_override', 'iam')]) as channel:
+    try:
+        g.IamServiceStub(channel).CreateGuestSession(p.CreateGuestSessionRequest(), timeout=3)
+    except grpc.RpcError as err:
+        assert err.code() == grpc.StatusCode.UNAVAILABLE, err.code()
+    else:
+        raise AssertionError('IAM accepted an unauthenticated service connection')
 PY
 run content python - <<'PY'
 import grpc

@@ -33,7 +33,7 @@ up-bff-delivery:
 	$(BFF_DELIVERY_COMPOSE) up -d --wait postgres kafka
 	$(BFF_DELIVERY_COMPOSE) run --rm --no-deps db-bootstrap
 	MIS_BFF_DB=true sh infra/db/migrate.sh --docker "$$($(BFF_DELIVERY_COMPOSE) ps -q postgres)"
-	$(BFF_DELIVERY_COMPOSE) up --build -d --wait bff
+	$(BFF_DELIVERY_COMPOSE) up --build -d --wait iam bff frontend
 
 test-bff-delivery:
 	bash infra/db/test-bff-delivery.sh

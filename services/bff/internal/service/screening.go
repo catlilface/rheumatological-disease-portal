@@ -7,6 +7,11 @@ type OwnedResult = models.OwnedResult
 
 type Screening struct {
 	Runtime
+	Archive interface {
+		SaveResult(string, models.Result) error
+		Result(string, models.ResultRef) (models.Result, error)
+		History(string, models.Window) (models.Page[models.Result], error)
+	}
 	Definition        models.Survey
 	ExplanationSource SourceRef
 	Sessions          Store[OwnedID, *models.Session]
@@ -49,11 +54,21 @@ func (s Screening) Get(key OwnedID) (*models.Session, error) {
 }
 
 func (s Screening) Exact(owner string, ref models.ResultRef) (models.Result, error) {
+	if s.Archive != nil {
+		return s.Archive.Result(owner, ref)
+	}
 	v, ok := s.Results.Get(OwnedResult{Owner: owner, ResultRef: ref})
 	if !ok {
 		return v, models.NotFound()
 	}
 	return v, nil
+}
+
+func (s Screening) History(owner string, w models.Window) (models.Page[models.Result], error) {
+	if s.Archive == nil {
+		return models.Page[models.Result]{}, models.NotFound()
+	}
+	return s.Archive.History(owner, w)
 }
 
 func (s Screening) Latest(key OwnedID) (models.Result, error) {
@@ -79,6 +94,7 @@ func (s Screening) change(key OwnedID, v int, action func(*models.Session) (bool
 	if err = session.Editable(v); err != nil {
 		return nil, err
 	}
+	session = session.Copy()
 	snapshot, err := action(session)
 	if err != nil {
 		return nil, err
@@ -86,7 +102,13 @@ func (s Screening) change(key OwnedID, v int, action func(*models.Session) (bool
 	refs := []models.Resource{models.Ref("screening", session.ID, session.Version)}
 	if snapshot {
 		r := session.Snapshot(s.Definition, s.ID)
-		s.Results.Put(OwnedResult{Owner: key.Owner, ResultRef: r.ResultRef}, r)
+		if s.Archive != nil {
+			if err := s.Archive.SaveResult(key.Owner, r); err != nil {
+				return nil, err
+			}
+		} else {
+			s.Results.Put(OwnedResult{Owner: key.Owner, ResultRef: r.ResultRef}, r)
+		}
 		refs = append(refs, models.Ref("result", r.ID, r.Version))
 	}
 	s.Sessions.Put(key, session)
